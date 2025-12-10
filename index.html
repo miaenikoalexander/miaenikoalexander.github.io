@@ -390,10 +390,14 @@
                 return y * (1 - t) + 2 * t; 
             }
 
-            // 3. Sphinx Plinth
+            // 3. Sphinx Clearing (Flattened Sand - No Platform)
             const sphinxDx = Math.abs(x - (-500));
             const sphinxDz = Math.abs(z - (-500));
-            if (sphinxDx < 70 && sphinxDz < 110) return 20;
+            const distToSphinx = Math.sqrt(sphinxDx * sphinxDx + sphinxDz * sphinxDz);
+            if (distToSphinx < 150) {
+                 const t = Math.min(1, Math.max(0, (150 - distToSphinx) / 50));
+                 return y * (1 - t) + 2 * t; 
+            }
 
             // 4. Sarcophagus Clearing (1500, -1500)
             const sarcDx = Math.abs(x - 1500);
@@ -1002,41 +1006,95 @@
             // LOCATION 4: SPHINX (-500, -500)
             {
                 const baseX = -500, baseZ = -500;
-                const h = 20;
+                const h = getTerrainHeight(baseX, baseZ);
 
                 const group = new THREE.Group();
-                const plinth = new THREE.Mesh(new THREE.BoxGeometry(140, 40, 220), matSandstone);
-                plinth.position.y = 20;
-                group.add(plinth);
                 
-                const body = new THREE.Mesh(new THREE.BoxGeometry(80, 60, 140), matSandstone);
-                body.position.y = 70;
-                body.position.z = 20;
+                // 1. BODY (Recumbent Lion)
+                // Main torso
+                const body = new THREE.Mesh(new THREE.BoxGeometry(70, 50, 120), matSandstone);
+                body.position.set(0, 25, 10); 
                 group.add(body);
-                const pawL = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 100), matSandstone);
-                pawL.position.set(-35, 50, 80);
+                
+                // Rear Haunches (Bulking out the back)
+                const haunchGeo = new THREE.BoxGeometry(30, 40, 60);
+                const haunchL = new THREE.Mesh(haunchGeo, matSandstone);
+                haunchL.position.set(-40, 20, -20);
+                group.add(haunchL);
+                const haunchR = new THREE.Mesh(haunchGeo, matSandstone);
+                haunchR.position.set(40, 20, -20);
+                group.add(haunchR);
+
+                // 2. FRONT LEGS & PAWS
+                const legGeo = new THREE.BoxGeometry(20, 20, 100);
+                const legL = new THREE.Mesh(legGeo, matSandstone);
+                legL.position.set(-25, 10, 80); // Stretching forward
+                group.add(legL);
+                const legR = new THREE.Mesh(legGeo, matSandstone);
+                legR.position.set(25, 10, 80);
+                group.add(legR);
+
+                // Paws (Tips)
+                const pawGeo = new THREE.BoxGeometry(25, 15, 30);
+                const pawL = new THREE.Mesh(pawGeo, matSandstone);
+                pawL.position.set(-25, 7.5, 135); 
                 group.add(pawL);
-                const pawR = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 100), matSandstone);
-                pawR.position.set(35, 50, 80);
+                const pawR = new THREE.Mesh(pawGeo, matSandstone);
+                pawR.position.set(25, 7.5, 135);
                 group.add(pawR);
 
+                // 3. HEAD & NEMES HEADDRESS
                 const headGroup = new THREE.Group();
-                headGroup.position.set(0, 120, 90);
-                const face = new THREE.Mesh(new THREE.SphereGeometry(35, 32, 32), matSandstone);
+                headGroup.position.set(0, 75, 80); // Up and forward
+
+                // Face
+                const face = new THREE.Mesh(new THREE.SphereGeometry(22, 32, 32), matSandstone);
                 headGroup.add(face);
-                const nemesL = new THREE.Mesh(new THREE.BoxGeometry(20, 60, 40), matSandstone);
-                nemesL.position.set(-30, -10, -10);
-                nemesL.rotation.z = 0.2;
-                headGroup.add(nemesL);
-                const nemesR = new THREE.Mesh(new THREE.BoxGeometry(20, 60, 40), matSandstone);
-                nemesR.position.set(30, -10, -10);
-                nemesR.rotation.z = -0.2;
-                headGroup.add(nemesR);
+
+                // Nose
+                const nose = new THREE.Mesh(new THREE.ConeGeometry(4, 10, 4), matSandstone);
+                nose.rotation.x = Math.PI / 2;
+                nose.position.z = 20;
+                nose.position.y = 0;
+                headGroup.add(nose);
+
+                // Pharaoh Beard
+                const beard = new THREE.Mesh(new THREE.BoxGeometry(6, 15, 6), matSandstone);
+                beard.position.set(0, -22, 15);
+                beard.rotation.x = 0.2;
+                headGroup.add(beard);
+
+                // Nemes Headdress (The iconic striped cloth)
+                // Top Flat
+                const nemesTop = new THREE.Mesh(new THREE.BoxGeometry(50, 10, 50), matSandstone);
+                nemesTop.position.y = 22;
+                headGroup.add(nemesTop);
+                
+                // Side Flaps (Triangular look)
+                const flapGeo = new THREE.BoxGeometry(15, 60, 40);
+                const flapL = new THREE.Mesh(flapGeo, matSandstone);
+                flapL.position.set(-28, 0, 5);
+                flapL.rotation.z = 0.3; // Flare out
+                flapL.rotation.y = -0.2; // Angle back
+                headGroup.add(flapL);
+
+                const flapR = new THREE.Mesh(flapGeo, matSandstone);
+                flapR.position.set(28, 0, 5);
+                flapR.rotation.z = -0.3; // Flare out
+                flapR.rotation.y = 0.2; // Angle back
+                headGroup.add(flapR);
+
+                // Back Tail of Headdress
+                const nemesBack = new THREE.Mesh(new THREE.BoxGeometry(40, 40, 20), matSandstone);
+                nemesBack.position.set(0, 0, -25);
+                nemesBack.rotation.x = 0.2;
+                headGroup.add(nemesBack);
+
                 group.add(headGroup);
 
                 // INTERACTION HITBOX FOR SPHINX (Between Paws)
                 const hitbox = new THREE.Mesh(new THREE.BoxGeometry(40, 40, 40), new THREE.MeshBasicMaterial({visible:false}));
-                hitbox.position.set(0, 50, 100); // Between paws
+                hitbox.position.set(0, 10, 110); // Between paws
                 hitbox.userData = { 
                     type: 'npc', 
                     name: 'Sphinx' 
@@ -1048,16 +1106,16 @@
                 // We will push this specific mesh to collectables.
                 collectables.push(hitbox);
 
-                group.position.set(baseX, 0, baseZ);
+                group.position.set(baseX, h, baseZ); // Set to ground height
                 group.rotation.y = Math.PI / 4;
                 scene.add(group);
 
                 const rad = Math.PI/4;
-                const dist = 140; 
+                const dist = 145; // Slightly further out to sit between paws nicely
                 const artX = baseX + Math.sin(rad)*dist;
                 const artZ = baseZ + Math.cos(rad)*dist;
                 
-                createArtifact(artX, 25, artZ, 'photo', "A worn 1800s-daguerrotype of British Family, guarded by a lonely sphinx", 'photo');
+                createArtifact(artX, h + 5, artZ, 'photo', "A worn 1800s-daguerrotype of British Family, guarded by a lonely sphinx", 'photo');
             }
         }
 
@@ -1247,7 +1305,7 @@
                 if(!inventory.photo) phrases.push("ANUBIS: The guardian of the west has kept a memory between its paws.");
                 
                 if (Object.values(inventory).every(Boolean)) {
-                      phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
+                       phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
                 }
 
                 if (phrases.length > 0) msg = phrases[Math.floor(Math.random() * phrases.length)];
@@ -1260,7 +1318,7 @@
             else if (npc.userData.name === 'Sphinx') {
                 const riddles = [
                     { q: "What walks on four legs in the morning, two in the afternoon, and three in the evening?", a: "SPHINX: A Human." },
-    
+ 
                 ];
                 
                 const r = riddles[Math.floor(Math.random() * riddles.length)];
