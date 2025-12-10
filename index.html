@@ -156,17 +156,17 @@
         </p>
         <div class="border-2 border-purple-600 p-1 inline-block animate-pulse cursor-pointer hover:border-white hover:text-white text-purple-400 transition-colors" onclick="startGame()">
             <div class="border border-purple-600 px-6 py-3 pixel-font text-sm hover:border-white">
-                ENTER THE RUINS OF ANCIENT EGYPT
+                ENTER HIS ANCIENT EGYPTIAN DREAM
             </div>
         </div>
         <div class="mt-8 text-xs text-purple-600 font-mono">
-            UP/W: Forward | DOWN/S: Backward<br>SPACE: Fly | E: Collect
+            UP/W: Forward | DOWN/S: Backward<br>SPACE: Fly | E: Collect | R: Riddle
         </div>
     </div>
 
     <!-- Win Screen -->
     <div id="win-screen" class="absolute inset-0 text-center">
-        <h1 class="text-2xl md:text-4xl mb-6 pixel-font text-yellow-400 tracking-widest leading-relaxed">
+        <h1 class="text-2xl md:text-4xl mb-6 pixel-font text-purple-400 tracking-widest leading-relaxed">
             YOU HAVE PLEASED<br>OGG VORBIS
         </h1>
         <p class="text-xl text-white mb-8 font-mono max-w-lg leading-loose">
@@ -318,7 +318,7 @@
         const MAX_JUMPS = Infinity; 
         
         // Secret Ending
-        let totalJumps = 0; 
+        let consecutiveJumps = 0; 
 
         // Camera State
         let cameraPitch = 0;
@@ -373,15 +373,16 @@
 
             // --- PLATFORM LOGIC (Smoothed) ---
             
-            // 1. CENTER SPAWN & ANUBIS CLEARING
-            if (dist < 300) {
-                 const t = Math.min(1, Math.max(0, (300 - dist) / 50));
+            // 1. CENTER SPAWN & OGG VORBIS CLEARING (Smoothed for easier exit)
+            if (dist < 400) {
+                 // Blend from 200 to 400 to prevent steep walls
+                 const t = Math.min(1, Math.max(0, (400 - dist) / 200));
                  return y * (1 - t) + 2 * t; 
             }
 
-            // 2. Pyramid Clearing (-500, 500)
-            const pyramidDx = Math.abs(x - (-500));
-            const pyramidDz = Math.abs(z - 500);
+            // 2. Pyramid Clearing (Was -500, 500, now moved further)
+            const pyramidDx = Math.abs(x - (-1500));
+            const pyramidDz = Math.abs(z - 1500);
             const distToPyramid = Math.sqrt(pyramidDx * pyramidDx + pyramidDz * pyramidDz);
 
             if (distToPyramid < 300) {
@@ -394,6 +395,15 @@
             const sphinxDz = Math.abs(z - (-500));
             if (sphinxDx < 70 && sphinxDz < 110) return 20;
 
+            // 4. Sarcophagus Clearing (1500, -1500)
+            const sarcDx = Math.abs(x - 1500);
+            const sarcDz = Math.abs(z - (-1500));
+            const distToSarc = Math.sqrt(sarcDx * sarcDx + sarcDz * sarcDz);
+            if (distToSarc < 300) {
+                 const t = Math.min(1, Math.max(0, (300 - distToSarc) / 50));
+                 return y * (1 - t) + 2 * t; 
+            }
+
             return y;
         }
 
@@ -403,9 +413,10 @@
 
             scene = new THREE.Scene();
             
-            const FOG_COLOR = 0x0a0212; 
+            // DEEP PURPLE FOG
+            const FOG_COLOR = 0x150020; 
             scene.background = new THREE.Color(FOG_COLOR);
-            scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0005); 
+            scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0008); 
 
             camera = new THREE.PerspectiveCamera(FOV, INTERNAL_WIDTH / INTERNAL_HEIGHT, 0.1, 15000); 
 
@@ -414,7 +425,8 @@
             renderer.setPixelRatio(window.devicePixelRatio); 
             container.appendChild(renderer.domElement);
 
-            const hemiLight = new THREE.HemisphereLight(0xaa00ff, 0x000000, 0.3); 
+            // Intense Violet Hemi Light
+            const hemiLight = new THREE.HemisphereLight(0xaa00ff, 0x220044, 0.6); 
             scene.add(hemiLight);
 
             // Pale Moonlight (Yellow)
@@ -423,7 +435,8 @@
             scene.add(dirLight);
 
             generateWorld();
-            createAnubis(); 
+            createAnubis();
+            createOggVorbis(); 
             setupControls();
 
             window.addEventListener('resize', onWindowResize);
@@ -561,6 +574,74 @@
             mesh.userData.light = light; 
         }
 
+        // --- OGG VORBIS OBELISK ---
+        function createOggVorbis() {
+            const group = new THREE.Group();
+            
+            // SUPER GLOWING DEEP PURPLE Material
+            const matGlow = new THREE.MeshStandardMaterial({
+                color: 0x120024, // Very dark violet base
+                emissive: 0x3a0066, // Deep indigo emissive
+                emissiveIntensity: 5.0, // High intensity for deep color
+                roughness: 0.1,
+                metalness: 1.0
+            });
+            
+            // Base stone material (Tinted Deep Dark Purple)
+            const matStone = new THREE.MeshLambertMaterial({ 
+                map: createPixelTexture('rock'),
+                color: 0x1a0520 // Almost black-purple stone
+            });
+
+            // PLINTH BASE
+            const plinth = new THREE.Mesh(new THREE.BoxGeometry(50, 10, 50), matStone);
+            plinth.position.y = 5;
+            group.add(plinth);
+
+            // OBELISK SHAFT (Tapered square pillar)
+            const shaftHeight = 180;
+            const shaft = new THREE.Mesh(
+                new THREE.CylinderGeometry(10, 25, shaftHeight, 4, 1), 
+                matGlow
+            );
+            shaft.position.y = 10 + shaftHeight / 2;
+            // Rotate to align corners with base
+            shaft.rotation.y = Math.PI / 4;
+            group.add(shaft);
+
+            // PYRAMIDION (Top pyramid)
+            const pyramidHeight = 30;
+            const pyramid = new THREE.Mesh(
+                new THREE.ConeGeometry(10, pyramidHeight, 4, 1),
+                matGlow
+            );
+            pyramid.position.y = 10 + shaftHeight + pyramidHeight / 2;
+            pyramid.rotation.y = Math.PI / 4;
+            group.add(pyramid);
+
+            // Place at center
+            const h = getTerrainHeight(0, 0);
+            group.position.set(0, h, 0);
+            
+            // Add DEEP VIOLET light source
+            const light = new THREE.PointLight(0x5500aa, 6, 600);
+            light.position.set(0, 100, 0);
+            group.add(light);
+
+            scene.add(group);
+            
+            // Add collision box
+            const hitboxHeight = shaftHeight + pyramidHeight + 10;
+            const hitbox = new THREE.Mesh(
+                new THREE.BoxGeometry(30, hitboxHeight, 30), 
+                new THREE.MeshBasicMaterial({visible:false})
+            );
+            hitbox.position.set(0, h + hitboxHeight / 2, 0);
+            hitbox.userData = { isBox: true, width: 40, depth: 40 }; 
+            objects.push(hitbox);
+            scene.add(hitbox);
+        }
+
         // --- ANUBIS NPC ---
         function createAnubis() {
             const group = new THREE.Group();
@@ -617,8 +698,8 @@
             staff.position.set(6, 15, 2);
             group.add(staff);
 
-            // Position in world (Near center dune)
-            const x = 50; 
+            // Position in world (Moved to edge as requested)
+            const x = 1500; 
             const z = 50;
             const h = getTerrainHeight(x, z);
             group.position.set(x, h, z);
@@ -706,9 +787,9 @@
                     x = Math.cos(angle) * radius;
                     z = Math.sin(angle) * radius;
                     
-                    distTemple = Math.sqrt((x - (-500))**2 + (z - 500)**2);
+                    distTemple = Math.sqrt((x - (-1500))**2 + (z - 1500)**2);
                     distOasis = Math.sqrt((x - 500)**2 + (z - 500)**2);
-                    distSarc = Math.sqrt((x - 500)**2 + (z - (-500))**2);
+                    distSarc = Math.sqrt((x - 1500)**2 + (z - (-1500))**2);
                     distSphinx = Math.sqrt((x - (-500))**2 + (z - (-500))**2);
                     const distOrigin = Math.sqrt(x*x + z*z);
 
@@ -730,22 +811,6 @@
                 rock.userData = { collisionRadius: 12 * s };
                 objects.push(rock);
                 scene.add(rock);
-            }
-            
-            // --- SMALL BLUE FLOWERS ---
-            const flowerGeo = new THREE.DodecahedronGeometry(3, 0); 
-            for (let i = 0; i < 30; i++) {
-                const x = (Math.random() - 0.5) * 8000; 
-                const z = (Math.random() - 0.5) * 8000;
-                const h = getTerrainHeight(x, z);
-                
-                const flower = new THREE.Mesh(flowerGeo, matBlueFlower);
-                flower.position.set(x, h + 2, z); 
-                flower.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-                const s = 0.8 + Math.random() * 0.5;
-                flower.scale.set(s, s, s);
-                
-                scene.add(flower);
             }
 
             // LOCATION 1: OASIS (500, 500)
@@ -833,12 +898,12 @@
                     scene.add(lotus);
                 }
 
-                createArtifact(baseX, h + 10, baseZ, 'rope', "A rough, frayed length of rope, stiffened by centuries of dry heat.", 'rope');
+                createArtifact(baseX, h + 10, baseZ, 'rope', "A length of rope, damp with oasis waters.", 'rope');
             }
 
-            // LOCATION 2: THE GREAT PYRAMID (-500, 500) - REPLACES TEMPLE
+            // LOCATION 2: THE GREAT PYRAMID (-1500, 1500) - REPLACES TEMPLE
             {
-                const baseX = -500, baseZ = 500;
+                const baseX = -1500, baseZ = 1500;
                 const h = 2; // Flat ground
                 
                 const group = new THREE.Group();
@@ -907,9 +972,9 @@
                 scene.add(group);
             }
 
-            // LOCATION 3: SARCOPHAGUS (500, -500)
+            // LOCATION 3: SARCOPHAGUS (1500, -1500)
             {
-                const baseX = 500, baseZ = -500;
+                const baseX = 1500, baseZ = -1500;
                 // Calculate ground height
                 const h = getTerrainHeight(baseX, baseZ);
                 
@@ -931,7 +996,7 @@
                 sarcGroup.rotation.y = -Math.PI/4;
                 scene.add(sarcGroup);
 
-                createArtifact(baseX, h + 25, baseZ, 'gem', "A shard of obsidian glass, vibrating with a faint, dark energy.", 'gem');
+                createArtifact(baseX, h + 25, baseZ, 'gem', "A small black gem, stolen from the sarcophagus of Hatshepsut.", 'gem');
             }
 
             // LOCATION 4: SPHINX (-500, -500)
@@ -992,7 +1057,7 @@
                 const artX = baseX + Math.sin(rad)*dist;
                 const artZ = baseZ + Math.cos(rad)*dist;
                 
-                createArtifact(artX, 25, artZ, 'photo', "A silver-plated photograph of a stern family, out of place in this ancient land.", 'photo');
+                createArtifact(artX, 25, artZ, 'photo', "A worn 1800s-daguerrotype of British Family, guarded by a lonely sphinx", 'photo');
             }
         }
 
@@ -1004,12 +1069,13 @@
                     case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
                     case 'ArrowDown': case 'KeyS': moveBackward = true; break;
                     case 'ArrowRight': case 'KeyD': moveRight = true; break;
-                    case 'KeyE': handleInput(); break; 
+                    case 'KeyE': handleInput('interact'); break; 
+                    case 'KeyR': handleInput('riddle'); break; 
                     case 'ShiftLeft': case 'ShiftRight': isRunning = true; break;
                     case 'Space': 
                         if(jumpCount < MAX_JUMPS) { verticalVelocity = 300; jumpCount++; 
-                            totalJumps++;
-                            if (totalJumps >= 100) triggerSecretEnding();
+                            consecutiveJumps++; 
+                            if (consecutiveJumps >= 400) triggerSecretEnding();
                         }
                         break;
                 }
@@ -1029,7 +1095,7 @@
             // Mouse Click Interaction
             document.addEventListener('mousedown', (event) => {
                 if(isGameActive && event.button === 0) { 
-                    handleInput(); 
+                    handleInput('interact'); 
                 }
             });
             
@@ -1053,14 +1119,27 @@
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('game-container').requestPointerLock();
             isGameActive = true;
-            camera.position.set(0, 50, 0); 
-            // Reset look angles
+            
+            // Random Spawn Logic
+            const angle = Math.random() * Math.PI * 2;
+            const minR = 400;
+            const maxR = 1200;
+            const r = minR + Math.random() * (maxR - minR);
+            
+            const sx = Math.cos(angle) * r;
+            const sz = Math.sin(angle) * r;
+            const sh = getTerrainHeight(sx, sz);
+            
+            camera.position.set(sx, sh + 50, sz);
+            
+            // Face the center (where Ogg Vorbis is)
+            const dx = 0 - sx;
+            const dz = 0 - sz;
+            cameraYaw = Math.atan2(dx, dz);
             cameraPitch = 0;
-            cameraYaw = 0;
-            camera.rotation.set(0,0,0);
             
             // Reset jumps for new game
-            totalJumps = 0; 
+            consecutiveJumps = 0; 
         }
 
         // SECRET ENDING FUNCTION
@@ -1080,25 +1159,27 @@
         }
 
         // CENTRAL INPUT HANDLER
-        function handleInput() {
-            // Priority 1: Reveal Riddle Answer
+        function handleInput(inputType = 'interact') {
+            // Priority 1: Reveal Riddle Answer (Always E or Click)
             if (riddleState.active) {
-                const box = document.getElementById('dialog-box');
-                const text = document.getElementById('dialog-text');
-                
-                text.innerText = riddleState.answer;
-                riddleState.active = false;
-                
-                // Hide after delay so user can read answer (unless they walk away)
-                if(dialogTimeout) clearTimeout(dialogTimeout);
-                dialogTimeout = setTimeout(() => { 
-                    closeDialog();
-                }, 5000);
+                if (inputType === 'interact') {
+                    const box = document.getElementById('dialog-box');
+                    const text = document.getElementById('dialog-text');
+                    
+                    text.innerText = riddleState.answer;
+                    riddleState.active = false;
+                    
+                    // Hide after delay so user can read answer (unless they walk away)
+                    if(dialogTimeout) clearTimeout(dialogTimeout);
+                    dialogTimeout = setTimeout(() => { 
+                        closeDialog();
+                    }, 5000);
+                }
                 return;
             }
 
             // Priority 2: Normal Interaction
-            tryInteraction();
+            tryInteraction(inputType);
         }
 
         function closeDialog() {
@@ -1108,7 +1189,7 @@
             riddleState.active = false;
         }
 
-        function tryInteraction() {
+        function tryInteraction(inputType) {
             if (!isGameActive) return;
             
             // Check collectables (Artifacts + NPCs)
@@ -1125,10 +1206,14 @@
                 if (target.userData.name === 'Sphinx') threshold = 160; // Increased for easier interaction
 
                 if(dist < threshold) { 
-                    if(target.userData.type === 'npc') {
-                        handleDialogue(target);
-                    } else {
-                        collectArtifact(target, i); 
+                    if(target.userData.name === 'Sphinx') {
+                        if (inputType === 'riddle') handleDialogue(target);
+                    } else if (inputType === 'interact') {
+                        if(target.userData.type === 'npc') {
+                            handleDialogue(target);
+                        } else {
+                            collectArtifact(target, i); 
+                        }
                     }
                     return; 
                 }
@@ -1151,9 +1236,9 @@
                 const phrases = [];
                 // General atmosphere
                 if (Math.random() < 0.3) {
-                    phrases.push("ANUBIS: The sands of time bury all, yet you dig.");
-                    phrases.push("ANUBIS: This valley is a memory of a world that never was.");
-                    phrases.push("ANUBIS: The moon watches with a cold, dead eye.");
+                    phrases.push("ANUBIS: Know yourself, and you shall know the gods.");
+                    phrases.push("ANUBIS: If you search for the laws of harmony, you will find knowledge.");
+                    phrases.push("ANUBIS: Wailing saves no man from the pit.");
                 }
                 // Hints
                 if(!inventory.rope) phrases.push("ANUBIS: The waters of life hide a tether to the past. Seek the Oasis.");
@@ -1162,7 +1247,7 @@
                 if(!inventory.photo) phrases.push("ANUBIS: The guardian of the west has kept a memory between its paws.");
                 
                 if (Object.values(inventory).every(Boolean)) {
-                     phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
+                      phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
                 }
 
                 if (phrases.length > 0) msg = phrases[Math.floor(Math.random() * phrases.length)];
@@ -1175,11 +1260,7 @@
             else if (npc.userData.name === 'Sphinx') {
                 const riddles = [
                     { q: "What walks on four legs in the morning, two in the afternoon, and three in the evening?", a: "SPHINX: A Human." },
-                    { q: "I have cities, but no houses. I have mountains, but no trees. I have water, but no fish. What am I?", a: "SPHINX: A Map." },
-                    { q: "The more you take, the more you leave behind. What am I?", a: "SPHINX: Footsteps." },
-                    { q: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind.", a: "SPHINX: An Echo." },
-                    { q: "I am always hungry, I must always be fed. The finger I touch, will soon turn red.", a: "SPHINX: Fire." },
-                    { q: "Only one color, but many sizes. Stuck at the bottom, yet easily flies. Present in sun, but not in rain.", a: "SPHINX: A Shadow." }
+    
                 ];
                 
                 const r = riddles[Math.floor(Math.random() * riddles.length)];
@@ -1294,6 +1375,8 @@
                     const targetY = terrainH + eyeHeight + bobOffset;
                     camera.position.y += (targetY - camera.position.y) * 15.0 * delta;
                     if (camera.position.y < terrainH + eyeHeight - 1.0) camera.position.y = terrainH + eyeHeight - 1.0;
+                    
+                    consecutiveJumps = 0;
                 }
                 
                 if (camera.position.y < terrainH + eyeHeight - 2) camera.position.y = terrainH + eyeHeight;
@@ -1333,26 +1416,37 @@
                     }
                 }
 
-                let nearArtifact = false;
+                let promptText = "";
+                let showPrompt = false;
+
                 // Check distance to artifacts (not NPCs)
                 collectables.forEach(art => {
                     if (art.userData.type !== 'npc') {
                         art.rotation.y += delta;
                         art.position.y = art.userData.baseY + Math.sin(time * 0.002 + art.userData.timeOffset) * 2;
-                        if(camera.position.distanceTo(art.position) < 35) nearArtifact = true;
-                    } else {
-                        // Check NPC distance for prompt
-                        const targetPos = new THREE.Vector3();
-                        art.getWorldPosition(targetPos);
-                        let threshold = 50;
-                        if (art.userData.name === 'Sphinx') threshold = 80;
-                        if(camera.position.distanceTo(targetPos) < threshold) nearArtifact = true;
+                    }
+                    
+                    // Check NPC distance for prompt
+                    const targetPos = new THREE.Vector3();
+                    art.getWorldPosition(targetPos);
+                    let threshold = 50;
+                    if (art.userData.name === 'Sphinx') threshold = 80;
+                    
+                    if(camera.position.distanceTo(targetPos) < threshold) {
+                        showPrompt = true;
+                        if (art.userData.name === 'Sphinx') promptText = "[ R ] HEAR RIDDLE";
+                        else if (art.userData.type === 'npc') promptText = "[ E ] SPEAK";
+                        else promptText = "[ E ] COLLECT ARTIFACT";
                     }
                 });
 
                 const prompt = document.getElementById('interaction-prompt');
-                if(nearArtifact) prompt.style.display = 'block';
-                else prompt.style.display = 'none';
+                if(showPrompt) {
+                    prompt.style.display = 'block';
+                    prompt.innerText = promptText;
+                } else {
+                    prompt.style.display = 'none';
+                }
 
                 prevTime = time;
             }
