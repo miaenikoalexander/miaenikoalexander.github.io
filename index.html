@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <title>Ogg Vorbis</title>
+ <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+ 
+ <!-- Three.js -->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+ <!-- Tailwind -->
+ <script src="https://cdn.tailwindcss.com"></script>
+ <!-- Retro Fonts -->
+ <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+
+ <style>
+ body {
+ margin: 0;
+ overflow: hidden;
+ background-color: #000;
+ font-family: 'VT323', monospace;
+ user-select: none;
+ }
+
+ #game-container {
+ position: absolute;
+ top: 0; left: 0; width: 100%; height: 100%;
+ cursor: none;
+ }
+
+ canvas {
+ width: 100% !important;
+ height: 100% !important;
+ image-rendering: pixelated; 
+ }
+
+ #ui-layer {
+ position: absolute;
+ top: 0; left: 0; width: 100%; height: 100%;
+ pointer-events: none;
+ z-index: 10;
+ }
+
+ .scanlines {
+ background: linear-gradient(
+ rgba(18, 16, 16, 0) 50%, 
+ rgba(0, 0, 0, 0.25) 50%
+ );
+ background-size: 100% 4px;
+ position: absolute;
+ inset: 0;
+ pointer-events: none;
+ z-index: 20;
+ opacity: 0.4;
+ }
+
+ .vignette {
+ position: absolute;
+ inset: 0;
+ background: radial-gradient(circle, transparent 50%, rgba(20,0,30,0.9) 100%);
+ z-index: 19;
+ }
+
+ .pixel-font { font-family: 'Press Start 2P', cursive; }
+ 
+ .dialog-box {
+ background: rgba(20, 0, 40, 0.9);
+ border: 2px solid #a855f7;
+ color: #e9d5ff;
+ padding: 20px;
+ max-width: 600px;
+ /* Moved to TOP to avoid overlap */
+ position: absolute;
+ top: 10%;
+ left: 50%;
+ transform: translateX(-50%);
+ display: none; 
+ text-shadow: 2px 2px #000;
+ text-align: center;
+ z-index: 40;
+ }
+
+ /* INVENTORY */
+ #inventory-panel {
+ position: absolute;
+ bottom: 20px;
+ left: 20px;
+ display: flex;
+ gap: 10px;
+ background: rgba(0, 0, 0, 0.5);
+ padding: 10px;
+ border-radius: 4px;
+ pointer-events: auto;
+ }
+
+ .artifact-slot {
+ width: 64px;
+ height: 64px;
+ background-color: #333; /* Darker empty state */
+ border: 4px solid;
+ border-color: #555 #222 #222 #555; 
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ position: relative;
+ image-rendering: pixelated;
+ background-size: 48px 48px;
+ background-repeat: no-repeat;
+ background-position: center;
+ }
+
+ .artifact-found {
+ background-color: #581c87; 
+ border-color: #d8b4fe #2e1065 #2e1065 #d8b4fe;
+ box-shadow: 0 0 15px #fbbf24;
+ }
+
+ .slot-tooltip {
+ position: absolute;
+ bottom: 70px;
+ background: #10002b;
+ color: #fbbf24;
+ padding: 8px;
+ font-size: 14px;
+ display: none;
+ border: 2px solid #fbbf24;
+ white-space: nowrap;
+ z-index: 30;
+ font-family: 'Press Start 2P', cursive;
+ }
+
+ .artifact-slot:hover .slot-tooltip {
+ display: block;
+ }
+
+ #start-screen, #win-screen {
+ background: #0f0518;
+ z-index: 50;
+ pointer-events: auto;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ justify-content: center;
+ }
+ 
+ #win-screen { display: none; }
+ </style>
+</head>
+<body>
+
+ <!-- Start Screen -->
+ <div id="start-screen" class="absolute inset-0 text-center">
+ <h1 class="text-xl md:text-3xl mb-4 pixel-font text-white tracking-widest leading-loose">
+ OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.27</span>
+ </h1>
+ <p class="text-xl text-purple-200 mb-8 font-mono max-w-lg">
+ "Four artifacts lost in the purple haze.<br>Find them to leave this dream."
+ </p>
+ <div class="border-2 border-purple-600 p-1 inline-block animate-pulse cursor-pointer hover:border-white hover:text-white text-purple-400 transition-colors" onclick="startGame()">
+ <div class="border border-purple-600 px-6 py-3 pixel-font text-sm hover:border-white">
+ ENTER CANYON
+ </div>
+ </div>
+ <div class="mt-8 text-xs text-purple-600 font-mono">
+ UP/W: Forward | DOWN/S: Backward<br>SPACE: Jump | E: Interact
+ </div>
+ </div>
+
+ <!-- Win Screen -->
+ <div id="win-screen" class="absolute inset-0 text-center">
+ <h1 class="text-2xl md:text-4xl mb-6 pixel-font text-yellow-400 tracking-widest">
+ ASCENSION GRANTED
+ </h1>
+ <p class="text-xl text-white mb-8 font-mono max-w-lg">
+ The artifacts reunite. The fog lifts.<br>You are awake.
+ </p>
+ <button onclick="location.reload()" class="bg-purple-700 text-white px-6 py-2 pixel-font text-xs hover:bg-purple-600">
+ DREAM AGAIN
+ </button>
+ </div>
+
+ <!-- UI Overlay -->
+ <div id="ui-layer">
+ <div class="scanlines"></div>
+ <div class="vignette"></div>
+ 
+ <!-- Inventory (Initially Empty) -->
+ <div id="inventory-panel">
+ <div id="slot-rope" class="artifact-slot">
+ <div class="slot-tooltip">Frayed Rope</div>
+ </div>
+ <div id="slot-idol" class="artifact-slot">
+ <div class="slot-tooltip">Ancient Idol</div>
+ </div>
+ <div id="slot-gem" class="artifact-slot">
+ <div class="slot-tooltip">Black Gem</div>
+ </div>
+ <div id="slot-photo" class="artifact-slot">
+ <div class="slot-tooltip">Daguerrotype</div>
+ </div>
+ </div>
+
+ <div id="interaction-prompt" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-yellow-200 pixel-font text-xs hidden">
+ [ E ] INTERACT
+ </div>
+
+ <div id="dialog-box" class="dialog-box pixel-font text-xs md:text-sm leading-loose tracking-widest">
+ <span id="dialog-text">...</span>
+ </div>
+ </div>
+
+ <!-- 3D Canvas Container -->
+ <div id="game-container"></div>
+
+ <script>
+ // --- INTERNAL PIXEL ART GENERATOR ---
+ function generatePixelIcon(type) {
+ const canvas = document.createElement('canvas');
+ canvas.width = 16;
+ canvas.height = 16;
+ const ctx = canvas.getContext('2d');
+ 
+ const p = (x, y, color) => {
+ ctx.fillStyle = color;
+ ctx.fillRect(x, y, 1, 1);
+ };
+
+ if (type === 'rope') {
+ const c = '#8B4513'; const d = '#5e2f0d';
+ p(6,4,c); p(7,4,c); p(8,4,c); 
+ p(5,5,c); p(9,5,c); p(5,6,c); p(9,6,c);
+ p(5,7,d); p(8,7,c); p(5,8,c); p(9,8,c);
+ p(6,9,c); p(7,9,c); p(8,9,c); p(7,10,d); p(7,11,d);
+ } 
+ else if (type === 'idol') {
+ const g = '#FFD700'; const s = '#DAA520';
+ p(7,3,g); p(8,3,g); p(6,4,g); p(9,4,g);
+ p(7,5,s); p(8,5,s); p(7,6,g); p(8,6,g);
+ p(6,7,g); p(9,7,g); p(6,8,g); p(9,8,g);
+ p(5,9,s); p(10,9,s);
+ } 
+ else if (type === 'gem') {
+ const b = '#000000'; const h = '#ffffff';
+ ctx.fillStyle = b;
+ ctx.beginPath();
+ ctx.moveTo(8, 2); ctx.lineTo(12, 6); ctx.lineTo(8, 12); ctx.lineTo(4, 6);
+ ctx.fill();
+ ctx.fillStyle = h; ctx.fillRect(7,5,2,2);
+ } 
+ else if (type === 'photo') {
+ const w = '#eeeeee'; const g = '#999999';
+ ctx.fillStyle = w; ctx.fillRect(4, 3, 8, 10);
+ ctx.fillStyle = '#333'; ctx.fillRect(6, 5, 4, 4);
+ ctx.strokeStyle = '#d2b48c'; ctx.strokeRect(4.5, 3.5, 7, 9);
+ }
+ return canvas.toDataURL();
+ }
+
+ // --- INTERNAL NOISE ---
+ const SimpleNoise = (function() {
+ var perm = new Uint8Array(512);
+ var p = new Uint8Array(256);
+ for(var i=0; i<256; i++) p[i] = i;
+ for(var i=0; i<256; i++) {
+ var r = Math.floor(Math.random() * 256);
+ var t = p[i]; p[i] = p[r]; p[r] = t;
+ }
+ for(var i=0; i<512; i++) perm[i] = p[i & 255];
+ function dot(g, x, y) { return g[0]*x + g[1]*y; }
+ var grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+ return {
+ noise2D: function(xin, yin) {
+ var n0, n1, n2; 
+ var F2 = 0.5*(Math.sqrt(3.0)-1.0);
+ var s = (xin+yin)*F2; 
+ var i = Math.floor(xin+s);
+ var j = Math.floor(yin+s);
+ var G2 = (3.0-Math.sqrt(3.0))/6.0;
+ var t = (i+j)*G2;
+ var X0 = i-t; 
+ var Y0 = j-t;
+ var x0 = xin-X0; 
+ var y0 = yin-Y0;
+ var i1, j1;
+ if(x0>y0) {i1=1; j1=0;} else {i1=0; j1=1;}
+ var x1 = x0 - i1 + G2; 
+ var y1 = y0 - j1 + G2;
+ var x2 = x0 - 1.0 + 2.0*G2; 
+ var y2 = y0 - 1.0 + 2.0*G2;
+ var ii = i & 255; 
+ var jj = j & 255;
+ var gi0 = perm[ii+perm[jj]] % 12;
+ var gi1 = perm[ii+i1+perm[jj+j1]] % 12;
+ var gi2 = perm[ii+1+perm[jj+1]] % 12;
+ var t0 = 0.5 - x0*x0 - y0*y0;
+ if(t0<0) n0 = 0.0; else { t0 *= t0; n0 = t0 * t0 * dot(grad3[gi0], x0, y0); }
+ var t1 = 0.5 - x1*x1 - y1*y1;
+ if(t1<0) n1 = 0.0; else { t1 *= t1; n1 = t1 * t1 * dot(grad3[gi1], x1, y1); }
+ var t2 = 0.5 - x2*x2 - y2*y2;
+ if(t2<0) n2 = 0.0; else { t2 *= t2; n2 = t2 * t2 * dot(grad3[gi2], x2, y2); }
+ return 70.0 * (n0 + n1 + n2);
+ }
+ };
+ })();
+
+ const noise = SimpleNoise; 
+
+ // --- CONFIG ---
+ const INTERNAL_WIDTH = 320;
+ const INTERNAL_HEIGHT = 240; 
+ const FOV = 70;
+ 
+ // --- STATE ---
+ let isGameActive = false;
+ let player, camera, scene, renderer;
+ let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isRunning = false;
+ let verticalVelocity = 0;
+ let canJump = false;
+ 
+ // Walking Physics
+ let bobTimer = 0;
+ let currentBobAmp = 0; 
+ const WALK_BOB_SPEED = 10;
+ const RUN_BOB_SPEED = 15;
+ const WALK_BOB_AMOUNT = 1.0; 
+ const RUN_BOB_AMOUNT = 2.0;
+
+ // Camera State
+ let cameraPitch = 0;
+ let cameraYaw = 0;
+ 
+ let prevTime = performance.now();
+ const velocity = new THREE.Vector3();
+ const direction = new THREE.Vector3();
+ let raycaster;
+ let objects = []; 
+ let collectables = [];
+ let interactables = []; // For NPC Anubis
+ let ground;
+ 
+ // Game Progression
+ let inventory = {
+ rope: false,
+ idol: false,
+ gem: false,
+ photo: false
+ };
+
+ function getTerrainHeight(x, z) {
+ const dist = Math.sqrt(x*x + z*z);
+ let y = 0;
+ 
+ // FLATTENED TERRAIN
+ y += noise.noise2D(x * 0.002, -z * 0.002) * 3; 
+ 
+ // Canyon Walls
+ if (dist > 900) {
+ y += Math.pow((dist - 900) * 0.1, 2); 
+ }
+ if (y > 300) y = 300;
+
+ // --- PLATFORM LOGIC (Smoothed) ---
+ // 1. Pyramid Clearing (-500, 500)
+ const pyramidDx = Math.abs(x - (-500));
+ const pyramidDz = Math.abs(z - 500);
+ const distToPyramid = Math.sqrt(pyramidDx * pyramidDx + pyramidDz * pyramidDz);
+
+ if (distToPyramid < 300) {
+ // Smooth blending to 2 (flat ground height)
+ const t = Math.min(1, Math.max(0, (300 - distToPyramid) / 50));
+ return y * (1 - t) + 2 * t; 
+ }
+
+ // 2. Sphinx Plinth
+ const sphinxDx = Math.abs(x - (-500));
+ const sphinxDz = Math.abs(z - (-500));
+ if (sphinxDx < 70 && sphinxDz < 110) return 20;
+
+ return y;
+ }
+
+ // --- INIT ---
+ function init() {
+ const container = document.getElementById('game-container');
+
+ scene = new THREE.Scene();
+ 
+ const FOG_COLOR = 0x0a0212; 
+ scene.background = new THREE.Color(FOG_COLOR);
+ scene.fog = new THREE.FogExp2(FOG_COLOR, 0.001); 
+
+ camera = new THREE.PerspectiveCamera(FOV, INTERNAL_WIDTH / INTERNAL_HEIGHT, 0.1, 5000);
+
+ renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+ renderer.setSize(window.innerWidth, window.innerHeight);
+ renderer.setPixelRatio(window.devicePixelRatio); 
+ container.appendChild(renderer.domElement);
+
+ const hemiLight = new THREE.HemisphereLight(0xaa00ff, 0x000000, 0.3); 
+ scene.add(hemiLight);
+
+ // Pale Moonlight (Yellow)
+ const dirLight = new THREE.DirectionalLight(0xffffee, 0.6); 
+ dirLight.position.set(0, 500, 0);
+ scene.add(dirLight);
+
+ generateWorld();
+ createAnubis(); // ADD ANUBIS
+ setupControls();
+
+ window.addEventListener('resize', onWindowResize);
+ animate();
+ }
+
+ // --- TEXTURES ---
+ function createPixelTexture(type) {
+ const size = 128; 
+ const canvas = document.createElement('canvas');
+ canvas.width = size;
+ canvas.height = size;
+ const ctx = canvas.getContext('2d');
+ 
+ if (type === 'ground') {
+ ctx.fillStyle = '#967249'; 
+ ctx.fillRect(0,0,size,size);
+ for(let i=0; i<1200; i++) { 
+ ctx.fillStyle = Math.random() > 0.5 ? '#bba07a' : '#7a5a38'; 
+ ctx.fillRect(Math.floor(Math.random()*size), Math.floor(Math.random()*size), 2, 2);
+ }
+ } else if (type === 'sandstone') {
+ ctx.fillStyle = '#6d4c41'; 
+ ctx.fillRect(0,0,size,size);
+ ctx.fillStyle = '#5d4037';
+ for(let i=0; i<300; i++) ctx.fillRect(Math.random()*size, Math.random()*size, 4, 2);
+ } else if (type === 'water') {
+ ctx.fillStyle = '#00ffff';
+ ctx.fillRect(0,0,size,size);
+ ctx.fillStyle = '#00cccc';
+ for(let i=0; i<200; i++) ctx.fillRect(Math.random()*size, Math.random()*size, 4, 1);
+ } else if (type === 'gold') {
+ ctx.fillStyle = '#ffd700';
+ ctx.fillRect(0,0,size,size);
+ ctx.fillStyle = '#eec900';
+ ctx.fillRect(0,0,64,64);
+ } else if (type === 'palm') {
+ ctx.fillStyle = '#0f4d0f';
+ ctx.fillRect(0,0,size,size);
+ for(let i=0; i<150; i++) {
+ ctx.fillStyle = '#0a330a';
+ ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+ }
+ } else if (type === 'acacia') {
+ ctx.fillStyle = '#2e4a1a'; // Olive green
+ ctx.fillRect(0,0,size,size);
+ for(let i=0; i<100; i++) {
+ ctx.fillStyle = '#1a2e0e';
+ ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+ }
+ } else if (type === 'papyrus') {
+ ctx.fillStyle = '#4a7a2a'; // Bright reed green
+ ctx.fillRect(0,0,size,size);
+ for(let i=0; i<50; i++) {
+ ctx.fillStyle = '#8ab56a'; // Yellow-green highlights
+ ctx.fillRect(Math.random()*size, 0, 1, size); // Vertical streaks
+ }
+ } else if (type === 'rock') {
+ ctx.fillStyle = '#5d4037'; 
+ ctx.fillRect(0,0,size,size);
+ ctx.fillStyle = '#3e2723';
+ for(let i=0; i<400; i++) ctx.fillRect(Math.random()*size, Math.random()*size, 3, 3);
+ } else if (type === 'moon') {
+ // Pale textured moon
+ ctx.fillStyle = '#eeeeee';
+ ctx.fillRect(0,0,size,size);
+ // Craters
+ for(let i=0; i<40; i++) {
+ const r = Math.random() * 10 + 2;
+ const x = Math.random() * size;
+ const y = Math.random() * size;
+ const c = Math.floor(200 + Math.random() * 55);
+ ctx.fillStyle = `rgb(${c-20},${c-20},${c-20})`;
+ ctx.beginPath();
+ ctx.arc(x,y,r,0,Math.PI*2);
+ ctx.fill();
+ }
+ }
+
+ const tex = new THREE.CanvasTexture(canvas);
+ tex.magFilter = THREE.NearestFilter;
+ tex.minFilter = THREE.NearestFilter;
+ return tex;
+ }
+
+ // --- ANUBIS NPC ---
+ function createAnubis() {
+ const group = new THREE.Group();
+ const matBlack = new THREE.MeshLambertMaterial({color: 0x111111});
+ const matGold = new THREE.MeshBasicMaterial({color: 0xffd700});
+ 
+ // Legs
+ const legL = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 12, 8), matBlack);
+ legL.position.set(-2, 6, 0);
+ group.add(legL);
+ const legR = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 12, 8), matBlack);
+ legR.position.set(2, 6, 0);
+ group.add(legR);
+
+ // Torso (Bare, black)
+ const torso = new THREE.Mesh(new THREE.BoxGeometry(7, 10, 4), matBlack);
+ torso.position.y = 17;
+ group.add(torso);
+
+ // Arms
+ const armL = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 8), matBlack);
+ armL.position.set(-4.5, 17, 0);
+ group.add(armL);
+ const armR = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 8), matBlack);
+ armR.position.set(4.5, 17, 0);
+ armR.rotation.z = -0.2; // Holding staff
+ group.add(armR);
+
+ // Head (Jackal)
+ const head = new THREE.Mesh(new THREE.BoxGeometry(5, 6, 6), matBlack);
+ head.position.y = 25;
+ group.add(head);
+ 
+ // Snout
+ const snout = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 5), matBlack);
+ snout.position.set(0, 24, 4);
+ group.add(snout);
+
+ // Ears (Tall)
+ const earL = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 2), matBlack);
+ earL.position.set(-1.5, 30, 0);
+ group.add(earL);
+ const earR = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 2), matBlack);
+ earR.position.set(1.5, 30, 0);
+ group.add(earR);
+
+ // Nemes/Collar
+ const collar = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 2, 8), matGold);
+ collar.position.y = 22;
+ group.add(collar);
+
+ // Staff
+ const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 30, 8), matGold);
+ staff.position.set(6, 15, 2);
+ group.add(staff);
+
+ // Position in world (Near center dune)
+ const x = 50; 
+ const z = 50;
+ const h = getTerrainHeight(x, z);
+ group.position.set(x, h, z);
+ // Face player spawn roughly
+ group.lookAt(0, h, 0); 
+ 
+ // Interaction Data
+ // Invisible Hitbox
+ const hitbox = new THREE.Mesh(new THREE.BoxGeometry(15, 35, 15), new THREE.MeshBasicMaterial({visible:false}));
+ hitbox.position.y = 15;
+ group.add(hitbox);
+ hitbox.userData = { 
+ type: 'npc', 
+ name: 'Anubis' 
+ };
+ interactables.push(hitbox); // Add to separate list or main objects list? 
+ // We'll use a unified interaction system.
+ collectables.push(hitbox); // Treat as interactable for simplicity in loop
+
+ scene.add(group);
+ }
+
+ // --- WORLD GEN ---
+ function generateWorld() {
+ const matGround = new THREE.MeshLambertMaterial({ map: createPixelTexture('ground') });
+ const matSandstone = new THREE.MeshLambertMaterial({ map: createPixelTexture('sandstone') });
+ const matRock = new THREE.MeshLambertMaterial({ map: createPixelTexture('rock') });
+ const matGold = new THREE.MeshBasicMaterial({ map: createPixelTexture('gold') });
+ const matWater = new THREE.MeshBasicMaterial({ map: createPixelTexture('water'), transparent: true, opacity: 0.6 });
+ const matPalm = new THREE.MeshLambertMaterial({ map: createPixelTexture('palm') });
+ const matAcacia = new THREE.MeshLambertMaterial({ map: createPixelTexture('acacia') });
+ const matPapyrus = new THREE.MeshLambertMaterial({ map: createPixelTexture('papyrus') });
+ const matStem = new THREE.MeshLambertMaterial({ color: 0x2d4c1e }); 
+ const matLotus = new THREE.MeshBasicMaterial({ color: 0x4444ff }); 
+ const matMoon = new THREE.MeshLambertMaterial({ map: createPixelTexture('moon') }); // Textured moon
+
+ // 1. STARS
+ const starGeo = new THREE.BufferGeometry();
+ const starCount = 16000;
+ const posArray = new Float32Array(starCount * 3);
+ for(let i=0; i<starCount*3; i++) {
+ const r = 3000 + Math.random() * 500;
+ const theta = Math.random() * Math.PI * 2;
+ const phi = Math.acos(2 * Math.random() - 1);
+ posArray[i] = r * Math.sin(phi) * Math.cos(theta);
+ posArray[i+1] = Math.abs(r * Math.sin(phi) * Math.sin(theta)); 
+ posArray[i+2] = r * Math.cos(phi);
+ }
+ starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+ const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 4, transparent: false}));
+ scene.add(stars);
+
+ // 2. MOON
+ const moonGeo = new THREE.SphereGeometry(100, 32, 32);
+ // Updated to Pale Yellow
+ const moonMat = new THREE.MeshBasicMaterial({ color: 0xffebcd });
+ const moon = new THREE.Mesh(moonGeo, moonMat);
+ moon.position.set(0, 800, 0); // High above center
+ moon.rotation.y = Math.PI/2;
+ scene.add(moon);
+
+ // 3. TERRAIN
+ const groundGeo = new THREE.PlaneGeometry(10000, 10000, 400, 400); 
+ const vertices = groundGeo.attributes.position.array;
+ for (let i = 0; i < vertices.length; i += 3) {
+ vertices[i+2] = getTerrainHeight(vertices[i], vertices[i+1]);
+ }
+ groundGeo.computeVertexNormals();
+ ground = new THREE.Mesh(groundGeo, matGround);
+ ground.rotation.x = -Math.PI / 2;
+ ground.frustumCulled = false; 
+ scene.add(ground);
+
+ // --- ROCKY OUTCROPPINGS ---
+ const rockGeo = new THREE.DodecahedronGeometry(15, 0);
+ for (let i = 0; i < 25; i++) {
+ let x, z, distTemple, distOasis, distSarc, distSphinx;
+ let safe = false;
+ let attempts = 0;
+ 
+ while(!safe && attempts < 10) {
+ const angle = Math.random() * Math.PI * 2;
+ const radius = 200 + Math.random() * 1000;
+ x = Math.cos(angle) * radius;
+ z = Math.sin(angle) * radius;
+ 
+ distTemple = Math.sqrt((x - (-500))**2 + (z - 500)**2);
+ distOasis = Math.sqrt((x - 500)**2 + (z - 500)**2);
+ distSarc = Math.sqrt((x - 500)**2 + (z - (-500))**2);
+ distSphinx = Math.sqrt((x - (-500))**2 + (z - (-500))**2);
+ 
+ if (distTemple > 300 && distOasis > 200 && distSarc > 100 && distSphinx > 150) {
+ safe = true;
+ }
+ attempts++;
+ }
+ 
+ if (!safe) continue;
+
+ const rock = new THREE.Mesh(rockGeo, matRock);
+ const h = getTerrainHeight(x, z);
+ const s = 1 + Math.random() * 3;
+ rock.scale.set(s, s*0.7, s);
+ rock.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+ rock.position.set(x, h + (s*3), z); 
+ rock.userData = { collisionRadius: 12 * s };
+ objects.push(rock);
+ scene.add(rock);
+ }
+
+ // LOCATION 1: OASIS (500, 500)
+ {
+ const baseX = 500, baseZ = 500;
+ const h = getTerrainHeight(baseX, baseZ) - 2; 
+ 
+ const pool = new THREE.Mesh(new THREE.CylinderGeometry(140, 140, 4, 64), matWater); 
+ pool.position.set(baseX, h + 1, baseZ);
+ scene.add(pool);
+
+ const island = new THREE.Mesh(new THREE.CylinderGeometry(30, 40, 6, 32), matGround);
+ island.position.set(baseX, h + 2, baseZ);
+ scene.add(island);
+
+ const trunkGeo = new THREE.CylinderGeometry(2, 4, 30, 8);
+ const frondGeo = new THREE.ConeGeometry(15, 5, 16);
+ 
+ for(let i=0; i<30; i++) {
+ const group = new THREE.Group();
+ const trunk = new THREE.Mesh(trunkGeo, matSandstone); 
+ trunk.position.y = 15;
+ group.add(trunk);
+ 
+ const crown = new THREE.Group();
+ crown.position.y = 30;
+ for(let j=0; j<8; j++) {
+ const frond = new THREE.Mesh(frondGeo, matPalm);
+ frond.rotation.z = Math.PI * 0.2;
+ frond.rotation.y = (j / 8) * Math.PI * 2;
+ frond.position.y = -2;
+ frond.position.x = 8; 
+ const frondWrapper = new THREE.Group();
+ frondWrapper.rotation.y = (j/8) * Math.PI * 2;
+ frondWrapper.add(frond);
+ crown.add(frondWrapper);
+ }
+ group.add(crown);
+
+ const angle = Math.random() * Math.PI * 2;
+ const r = 90 + Math.random() * 60;
+ group.position.set(baseX + Math.cos(angle)*r, h, baseZ + Math.sin(angle)*r);
+ 
+ const s = 4.0 + Math.random() * 2;
+ group.scale.set(s,s,s);
+ group.rotation.z = (Math.random()-0.5)*0.3;
+ group.rotation.x = (Math.random()-0.5)*0.3;
+ scene.add(group);
+ }
+
+ // PAPYRUS REEDS
+ const stalkGeo = new THREE.CylinderGeometry(0.2, 0.2, 8, 4);
+ const tuftGeo = new THREE.ConeGeometry(2, 2, 8, 1, true);
+ 
+ for(let i=0; i<150; i++) { 
+ const group = new THREE.Group();
+ const stalk = new THREE.Mesh(stalkGeo, matStem);
+ stalk.position.y = 4;
+ group.add(stalk);
+ 
+ const tuft = new THREE.Mesh(tuftGeo, matPapyrus);
+ tuft.position.y = 8;
+ tuft.rotation.x = Math.PI; 
+ group.add(tuft);
+
+ const angle = Math.random() * Math.PI * 2;
+ const r = 135 + Math.random() * 15; 
+ group.position.set(baseX + Math.cos(angle)*r, h, baseZ + Math.sin(angle)*r);
+ 
+ const s = 1.0 + Math.random() * 0.5;
+ group.scale.set(s,s,s);
+ group.rotation.z = (Math.random()-0.5)*0.2;
+ group.rotation.x = (Math.random()-0.5)*0.2;
+ scene.add(group);
+ }
+
+ // BLUE LOTUS
+ const lotusGeo = new THREE.CylinderGeometry(1, 0, 1, 6);
+ for(let i=0; i<15; i++) {
+ const lotus = new THREE.Mesh(lotusGeo, matLotus);
+ const angle = Math.random() * Math.PI * 2;
+ const r = Math.random() * 120; 
+ lotus.position.set(baseX + Math.cos(angle)*r, h + 3.2, baseZ + Math.sin(angle)*r); 
+ lotus.rotation.x = -Math.PI/2; 
+ scene.add(lotus);
+ }
+
+ createArtifact(baseX, h + 10, baseZ, 'rope', "A rough, frayed length of rope, stiffened by centuries of dry heat.", 'rope');
+ }
+
+ // LOCATION 2: THE GREAT PYRAMID (-500, 500) - REPLACES TEMPLE
+ {
+ const baseX = -500, baseZ = 500;
+ const h = 2; // Flat ground
+ 
+ const group = new THREE.Group();
+ 
+ // Pyramid (Base 250, Height 300)
+ const pyramid = new THREE.Mesh(new THREE.ConeGeometry(177, 300, 4), matSandstone);
+ pyramid.position.y = 150; // Half height
+ pyramid.rotation.y = Math.PI / 4; // Align sides
+ 
+ // Collision
+ pyramid.userData = { isBox: true, width: 250, depth: 250 };
+ objects.push(pyramid);
+ group.add(pyramid);
+
+ // Pedestal for Idol
+ const pedestal = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), matSandstone);
+ pedestal.position.set(0, 5, 180); // In front of pyramid (Further out)
+ group.add(pedestal);
+
+ group.position.set(baseX, 0, baseZ); 
+ // Rotate entire group to face center (0,0) from (-500, 500).
+ group.rotation.y = -Math.PI / 4;
+ scene.add(group);
+
+ // Idol
+ const rad = -Math.PI/4;
+ const localZ = 180; // Matches pedestal position
+ const artX = baseX + (0 * Math.cos(rad) + localZ * Math.sin(rad)); 
+ const artZ = baseZ + (0 * Math.sin(rad) + localZ * Math.cos(rad)); 
+
+ createArtifact(artX, h + 15, artZ, 'idol', "A heavy golden idol depicting a forgotten god, its eyes seemingly following you.", 'idol');
+ }
+
+ // --- ACACIA TREES SCATTERED (New) ---
+ const acaciaTrunkGeo = new THREE.CylinderGeometry(1, 2, 10, 6);
+ const acaciaTopGeo = new THREE.CylinderGeometry(15, 2, 4, 8); // Flat top
+ 
+ for(let i=0; i<15; i++) { // Reduced count
+ // Random position away from center structures
+ let ax, az;
+ let valid = false;
+ while(!valid) {
+ ax = (Math.random() - 0.5) * 2000;
+ az = (Math.random() - 0.5) * 2000;
+ const distCenter = Math.sqrt(ax*ax + az*az);
+ // Avoid immediate center and structures roughly
+ if(distCenter > 300) valid = true;
+ }
+ 
+ const group = new THREE.Group();
+ const trunk = new THREE.Mesh(acaciaTrunkGeo, matSandstone); // Bark
+ trunk.position.y = 5;
+ trunk.rotation.x = 0.1; // crooked
+ group.add(trunk);
+ 
+ const top = new THREE.Mesh(acaciaTopGeo, matAcacia);
+ top.position.y = 10;
+ group.add(top);
+
+ const ah = getTerrainHeight(ax, az);
+ group.position.set(ax, ah, az);
+ // Taller and larger scaling
+ const s = 3.0 + Math.random() * 2.0; 
+ group.scale.set(s, s * 1.5, s); // Extra height scaling
+ scene.add(group);
+ }
+
+ // LOCATION 3: SARCOPHAGUS (500, -500)
+ {
+ const baseX = 500, baseZ = -500;
+ // Calculate ground height
+ const h = getTerrainHeight(baseX, baseZ);
+ 
+ const sarcGroup = new THREE.Group();
+ const body = new THREE.Mesh(new THREE.BoxGeometry(16, 12, 40), matGold);
+ body.position.y = 6;
+ sarcGroup.add(body);
+ const shoulders = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 15), matGold);
+ shoulders.position.set(0, 6, -10);
+ sarcGroup.add(shoulders);
+ const head = new THREE.Mesh(new THREE.BoxGeometry(14, 10, 12), matGold);
+ head.position.set(0, 14, -12);
+ sarcGroup.add(head);
+ const headdress = new THREE.Mesh(new THREE.BoxGeometry(22, 4, 14), new THREE.MeshLambertMaterial({color:0x0000ff}));
+ headdress.position.set(0, 16, -12);
+ sarcGroup.add(headdress);
+
+ sarcGroup.position.set(baseX, h, baseZ); 
+ sarcGroup.rotation.y = -Math.PI/4;
+ scene.add(sarcGroup);
+
+ createArtifact(baseX, h + 25, baseZ, 'gem', "A shard of obsidian glass, vibrating with a faint, dark energy.", 'gem');
+ }
+
+ // LOCATION 4: SPHINX (-500, -500)
+ {
+ const baseX = -500, baseZ = -500;
+ const h = 20;
+
+ const group = new THREE.Group();
+ const plinth = new THREE.Mesh(new THREE.BoxGeometry(140, 40, 220), matSandstone);
+ plinth.position.y = 20;
+ group.add(plinth);
+ 
+ const body = new THREE.Mesh(new THREE.BoxGeometry(80, 60, 140), matSandstone);
+ body.position.y = 70;
+ body.position.z = 20;
+ group.add(body);
+ const pawL = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 100), matSandstone);
+ pawL.position.set(-35, 50, 80);
+ group.add(pawL);
+ const pawR = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 100), matSandstone);
+ pawR.position.set(35, 50, 80);
+ group.add(pawR);
+
+ const headGroup = new THREE.Group();
+ headGroup.position.set(0, 120, 90);
+ const face = new THREE.Mesh(new THREE.SphereGeometry(35, 32, 32), matSandstone);
+ headGroup.add(face);
+ const nemesL = new THREE.Mesh(new THREE.BoxGeometry(20, 60, 40), matSandstone);
+ nemesL.position.set(-30, -10, -10);
+ nemesL.rotation.z = 0.2;
+ headGroup.add(nemesL);
+ const nemesR = new THREE.Mesh(new THREE.BoxGeometry(20, 60, 40), matSandstone);
+ nemesR.position.set(30, -10, -10);
+ nemesR.rotation.z = -0.2;
+ headGroup.add(nemesR);
+ group.add(headGroup);
+
+ group.position.set(baseX, 0, baseZ);
+ group.rotation.y = Math.PI / 4;
+ scene.add(group);
+
+ const rad = Math.PI/4;
+ const dist = 140; 
+ const artX = baseX + Math.sin(rad)*dist;
+ const artZ = baseZ + Math.cos(rad)*dist;
+ 
+ createArtifact(artX, 25, artZ, 'photo', "A silver-plated photograph of a stern family, out of place in this ancient land.", 'photo');
+ }
+ }
+
+ function createArtifact(x, y, z, id, desc, type) {
+ let mesh;
+ let lightColor = 0xffaa00; 
+
+ if (type === 'rope') {
+ const geo = new THREE.TorusGeometry(1.5, 0.4, 16, 32);
+ const mat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+ mesh = new THREE.Mesh(geo, mat);
+ } 
+ else if (type === 'idol') {
+ mesh = new THREE.Group();
+ const body = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 1.5), new THREE.MeshLambertMaterial({color: 0xffd700}));
+ const head = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 2.5), new THREE.MeshLambertMaterial({color: 0xffd700}));
+ head.position.y = 3;
+ mesh.add(body);
+ mesh.add(head);
+ }
+ else if (type === 'gem') {
+ const geo = new THREE.IcosahedronGeometry(2, 0);
+ const mat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.9 });
+ mesh = new THREE.Mesh(geo, mat);
+ }
+ else if (type === 'photo') {
+ const geo = new THREE.BoxGeometry(3, 4, 0.2);
+ const mat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+ mesh = new THREE.Mesh(geo, mat);
+ }
+ else {
+ const geo = new THREE.OctahedronGeometry(2, 0);
+ const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+ mesh = new THREE.Mesh(geo, mat);
+ }
+
+ mesh.position.set(x, y, z);
+ mesh.userData = { id: id, desc: desc, baseY: y, timeOffset: Math.random() * 100, type: 'artifact' };
+ scene.add(mesh);
+ collectables.push(mesh);
+ 
+ const light = new THREE.PointLight(lightColor, 2, 40);
+ light.position.set(x, y, z);
+ scene.add(light);
+ mesh.userData.light = light; 
+ }
+
+ // --- CONTROLS & ANIMATION ---
+ function setupControls() {
+ const onKeyDown = function (event) {
+ switch (event.code) {
+ case 'ArrowUp': case 'KeyW': moveForward = true; break;
+ case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+ case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+ case 'ArrowRight': case 'KeyD': moveRight = true; break;
+ case 'KeyE': tryInteraction(); break; 
+ case 'ShiftLeft': case 'ShiftRight': isRunning = true; break;
+ case 'Space': 
+ if(canJump) { verticalVelocity = 300; canJump = false; }
+ break;
+ }
+ };
+ const onKeyUp = function (event) {
+ switch (event.code) {
+ case 'ArrowUp': case 'KeyW': moveForward = false; break;
+ case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+ case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+ case 'ArrowRight': case 'KeyD': moveRight = false; break;
+ case 'ShiftLeft': case 'ShiftRight': isRunning = false; break;
+ }
+ };
+ document.addEventListener('keydown', onKeyDown);
+ document.addEventListener('keyup', onKeyUp);
+ 
+ // REFACTORED MOUSE LOOK for smooth 360
+ document.addEventListener('mousemove', (event) => {
+ if (!isGameActive) return;
+ 
+ const sensitivity = 0.002;
+ cameraYaw -= event.movementX * sensitivity;
+ cameraPitch -= event.movementY * sensitivity;
+
+ // Clamp pitch to avoid flipping over (neck limit)
+ cameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraPitch));
+ 
+ // Apply rotation
+ // Order YXZ is typical for FPS (Yaw then Pitch)
+ camera.rotation.set(cameraPitch, cameraYaw, 0, 'YXZ');
+ });
+ }
+
+ function startGame() {
+ document.getElementById('start-screen').style.display = 'none';
+ document.getElementById('game-container').requestPointerLock();
+ isGameActive = true;
+ camera.position.set(0, 50, 0); 
+ // Reset look angles
+ cameraPitch = 0;
+ cameraYaw = 0;
+ camera.rotation.set(0,0,0);
+ }
+
+ function tryInteraction() {
+ if (!isGameActive) return;
+ 
+ // Check collectables (Artifacts + NPCs)
+ // NPCs are stored in collectables list for interaction convenience
+ // We differentiate by type
+ 
+ for(let i=collectables.length-1; i>=0; i--) {
+ const target = collectables[i];
+ // For Anubis, target is the hitbox in the group
+ // We need world position of that hitbox
+ const targetPos = new THREE.Vector3();
+ target.getWorldPosition(targetPos);
+ 
+ const dist = camera.position.distanceTo(targetPos);
+ 
+ if(dist < 50) { 
+ if(target.userData.type === 'npc') {
+ handleDialogue(target);
+ } else {
+ collectArtifact(target, i); 
+ }
+ return; 
+ }
+ }
+ }
+
+ function handleDialogue(npc) {
+ let msg = "ANUBIS: ...";
+ if(npc.userData.name === 'Anubis') {
+ const phrases = [];
+ 
+ // General atmosphere
+ if (Math.random() < 0.3) {
+ phrases.push("ANUBIS: The sands of time bury all, yet you dig.");
+ phrases.push("ANUBIS: This valley is a memory of a world that never was.");
+ phrases.push("ANUBIS: The moon watches with a cold, dead eye.");
+ }
+
+ // Hints
+ if(!inventory.rope) {
+ phrases.push("ANUBIS: The waters of life hide a tether to the past. Seek the Oasis.");
+ phrases.push("ANUBIS: Where green life defies the sand, a tool of binding awaits.");
+ }
+ if(!inventory.idol) {
+ phrases.push("ANUBIS: The Great Pyramid casts a long shadow. Look to its feet.");
+ phrases.push("ANUBIS: A golden face stares at the monolith. Find it.");
+ }
+ if(!inventory.gem) {
+ phrases.push("ANUBIS: A queen sleeps in the south. Her heart is black as night.");
+ phrases.push("ANUBIS: In the valley of kings, a dark stone rests upon gold.");
+ }
+ if(!inventory.photo) {
+ phrases.push("ANUBIS: The guardian of the west has lost its face, but kept a memory.");
+ phrases.push("ANUBIS: Between the paws of the beast, a silver moment is frozen.");
+ }
+ 
+ if (Object.values(inventory).every(Boolean)) {
+ phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
+ phrases.push("ANUBIS: Ascension awaits. The dream is ending.");
+ }
+
+ // Pick random if multiple
+ if (phrases.length > 0) {
+ msg = phrases[Math.floor(Math.random() * phrases.length)];
+ }
+ }
+ 
+ const box = document.getElementById('dialog-box');
+ document.getElementById('dialog-text').innerText = msg;
+ box.style.display = 'block';
+ setTimeout(() => { box.style.display = 'none'; }, 6000);
+ }
+
+ function collectArtifact(mesh, index) {
+ const id = mesh.userData.id;
+ const desc = mesh.userData.desc;
+ inventory[id] = true;
+ const slot = document.getElementById('slot-' + id);
+ slot.classList.add('artifact-found');
+ 
+ // Set dynamic pixel art icon
+ slot.style.backgroundImage = 'url(' + generatePixelIcon(id) + ')';
+
+ const box = document.getElementById('dialog-box');
+ document.getElementById('dialog-text').innerText = desc;
+ box.style.display = 'block';
+ setTimeout(() => { box.style.display = 'none'; }, 4000);
+ 
+ scene.remove(mesh);
+ scene.remove(mesh.userData.light);
+ collectables.splice(index, 1);
+ 
+ if(Object.values(inventory).every(Boolean)) {
+ setTimeout(() => {
+ document.exitPointerLock();
+ document.getElementById('win-screen').style.display = 'flex';
+ isGameActive = false;
+ }, 3000);
+ }
+ }
+
+ function animate() {
+ requestAnimationFrame(animate);
+ if (isGameActive) {
+ const time = performance.now();
+ let delta = (time - prevTime) / 1000;
+ if(delta > 0.1) delta = 0.1;
+
+ velocity.x -= velocity.x * 8.0 * delta; 
+ velocity.z -= velocity.z * 8.0 * delta;
+ verticalVelocity -= 900 * delta; 
+
+ direction.z = Number(moveBackward) - Number(moveForward);
+ direction.x = Number(moveRight) - Number(moveLeft);
+ direction.normalize(); 
+
+ const speed = isRunning ? 1000.0 : 500.0;
+ 
+ if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+ if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+
+ camera.translateX(-velocity.x * delta);
+ camera.translateZ(-velocity.z * delta);
+ camera.position.y += verticalVelocity * delta;
+
+ const terrainH = getTerrainHeight(camera.position.x, camera.position.z);
+ const eyeHeight = 20;
+
+ if (camera.position.y < terrainH + eyeHeight) {
+ verticalVelocity = 0;
+ canJump = true;
+ 
+ let targetAmp = 0;
+ let targetSpeed = WALK_BOB_SPEED;
+ if (moveForward || moveBackward || moveLeft || moveRight) {
+ targetSpeed = isRunning ? RUN_BOB_SPEED : WALK_BOB_SPEED;
+ targetAmp = isRunning ? RUN_BOB_AMOUNT : WALK_BOB_AMOUNT;
+ }
+ currentBobAmp += (targetAmp - currentBobAmp) * 10.0 * delta;
+ bobTimer += delta * targetSpeed;
+ const bobOffset = Math.sin(bobTimer) * currentBobAmp;
+ const targetY = terrainH + eyeHeight + bobOffset;
+ camera.position.y += (targetY - camera.position.y) * 15.0 * delta;
+ if (camera.position.y < terrainH + eyeHeight - 1.0) camera.position.y = terrainH + eyeHeight - 1.0;
+ }
+ 
+ if (camera.position.y < terrainH + eyeHeight - 2) camera.position.y = terrainH + eyeHeight;
+
+ const playerRadius = 8;
+ for(let obj of objects) {
+ if(obj.userData.collisionRadius) {
+ const objPos = new THREE.Vector3();
+ obj.getWorldPosition(objPos);
+ const dx = camera.position.x - objPos.x;
+ const dz = camera.position.z - objPos.z;
+ const dist = Math.sqrt(dx*dx + dz*dz);
+ const minDist = obj.userData.collisionRadius + playerRadius;
+ 
+ if(dist < minDist) {
+ const angle = Math.atan2(dz, dx);
+ camera.position.x = objPos.x + Math.cos(angle) * minDist;
+ camera.position.z = objPos.z + Math.sin(angle) * minDist;
+ }
+ }
+ else if(obj.userData.isBox) {
+ // Improved Rotated Box Collision Check
+ const objPos = new THREE.Vector3();
+ obj.getWorldPosition(objPos);
+ 
+ // Transform player to box local space
+ // 1. Translate relative to center
+ const tx = camera.position.x - obj.parent.position.x;
+ const tz = camera.position.z - obj.parent.position.z;
+ // 2. Inverse Rotate
+ const rot = -obj.parent.rotation.y; 
+ const lx = tx * Math.cos(rot) - tz * Math.sin(rot);
+ const lz = tx * Math.sin(rot) + tz * Math.cos(rot);
+ 
+ // Get box local position relative to group
+ const bx = obj.position.x;
+ const bz = obj.position.z;
+ 
+ const hw = obj.userData.width / 2 + playerRadius;
+ const hd = obj.userData.depth / 2 + playerRadius;
+ 
+ // Check local AABB
+ if (Math.abs(lx - bx) < hw && Math.abs(lz - bz) < hd) {
+ const penX = hw - Math.abs(lx - bx);
+ const penZ = hd - Math.abs(lz - bz);
+ 
+ let nlx = lx;
+ let nlz = lz;
+
+ if (penX < penZ) {
+ const sign = (lx > bx) ? 1 : -1;
+ nlx = bx + (hw * sign);
+ } else {
+ const sign = (lz > bz) ? 1 : -1;
+ nlz = bz + (hd * sign);
+ }
+ 
+ // Transform back to World
+ const frot = obj.parent.rotation.y;
+ camera.position.x = obj.parent.position.x + (nlx * Math.cos(frot) - nlz * Math.sin(frot));
+ camera.position.z = obj.parent.position.z + (nlx * Math.sin(frot) + nlz * Math.cos(frot));
+ }
+ }
+ }
+
+ let nearArtifact = false;
+ // Check distance to artifacts (not NPCs)
+ collectables.forEach(art => {
+ if (art.userData.type !== 'npc') {
+ art.rotation.y += delta;
+ art.position.y = art.userData.baseY + Math.sin(time * 0.002 + art.userData.timeOffset) * 2;
+ if(camera.position.distanceTo(art.position) < 35) nearArtifact = true;
+ } else {
+ // Check NPC distance for prompt
+ const targetPos = new THREE.Vector3();
+ art.getWorldPosition(targetPos);
+ if(camera.position.distanceTo(targetPos) < 50) nearArtifact = true;
+ }
+ });
+
+ const prompt = document.getElementById('interaction-prompt');
+ if(nearArtifact) prompt.style.display = 'block';
+ else prompt.style.display = 'none';
+
+ prevTime = time;
+ }
+ renderer.render(scene, camera);
+ }
+
+ function onWindowResize() {
+ camera.aspect = window.innerWidth / window.innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(window.innerWidth, window.innerHeight);
+ }
+
+ init();
+ </script>
+</body>
+</html>
