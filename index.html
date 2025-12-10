@@ -68,7 +68,6 @@
             color: #e9d5ff;
             padding: 20px;
             max-width: 600px;
-            /* Moved to TOP to avoid overlap */
             position: absolute;
             top: 10%;
             left: 50%;
@@ -95,7 +94,7 @@
         .artifact-slot {
             width: 64px;
             height: 64px;
-            background-color: #333; /* Darker empty state */
+            background-color: #333; 
             border: 4px solid;
             border-color: #555 #222 #222 #555; 
             display: flex;
@@ -150,7 +149,7 @@
     <!-- Start Screen -->
     <div id="start-screen" class="absolute inset-0 text-center">
         <h1 class="text-xl md:text-3xl mb-4 pixel-font text-white tracking-widest leading-loose">
-            OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.34</span>
+            OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.36</span>
         </h1>
         <p class="text-xl text-purple-200 mb-8 font-mono max-w-2xl">
             "Four artifacts lost in the haze of memory.<br>Liberate them to put Ogg Vorbis to rest."
@@ -161,7 +160,7 @@
             </div>
         </div>
         <div class="mt-8 text-xs text-purple-600 font-mono">
-            UP/W: Forward | DOWN/S: Backward<br>SPACE: Jump | E: Collect
+            UP/W: Forward | DOWN/S: Backward<br>SPACE: Fly | E: Collect
         </div>
     </div>
 
@@ -184,7 +183,7 @@
         <div class="scanlines"></div>
         <div class="vignette"></div>
         
-        <!-- Inventory (Initially Empty) -->
+        <!-- Inventory -->
         <div id="inventory-panel">
             <div id="slot-rope" class="artifact-slot">
                 <div class="slot-tooltip">Frayed Rope</div>
@@ -316,7 +315,10 @@
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isRunning = false;
         let verticalVelocity = 0;
         let jumpCount = 0; 
-        const MAX_JUMPS = 2; 
+        const MAX_JUMPS = Infinity; 
+        
+        // Secret Ending
+        let totalJumps = 0; 
 
         // Camera State
         let cameraPitch = 0;
@@ -371,7 +373,7 @@
 
             // --- PLATFORM LOGIC (Smoothed) ---
             
-            // 1. CENTER SPAWN & ANUBIS CLEARING (New Fix)
+            // 1. CENTER SPAWN & ANUBIS CLEARING
             if (dist < 300) {
                  const t = Math.min(1, Math.max(0, (300 - dist) / 50));
                  return y * (1 - t) + 2 * t; 
@@ -485,8 +487,10 @@
                 ctx.fillStyle = '#3e2723';
                 for(let i=0; i<400; i++) ctx.fillRect(Math.random()*size, Math.random()*size, 3, 3);
             } else if (type === 'moon') {
+                // Pale textured moon
                 ctx.fillStyle = '#eeeeee';
                 ctx.fillRect(0,0,size,size);
+                // Craters
                 for(let i=0; i<40; i++) {
                     const r = Math.random() * 10 + 2;
                     const x = Math.random() * size;
@@ -510,6 +514,51 @@
             tex.magFilter = THREE.NearestFilter;
             tex.minFilter = THREE.NearestFilter;
             return tex;
+        }
+
+        // --- ARTIFACT CREATION ---
+        function createArtifact(x, y, z, id, desc, type) {
+            let mesh;
+            let lightColor = 0xffaa00; 
+
+            if (type === 'rope') {
+                const geo = new THREE.TorusGeometry(1.5, 0.4, 16, 32);
+                const mat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+                mesh = new THREE.Mesh(geo, mat);
+            } 
+            else if (type === 'idol') {
+                mesh = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 1.5), new THREE.MeshLambertMaterial({color: 0xffd700}));
+                const head = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 2.5), new THREE.MeshLambertMaterial({color: 0xffd700}));
+                head.position.y = 3;
+                mesh.add(body);
+                mesh.add(head);
+            }
+            else if (type === 'gem') {
+                const geo = new THREE.IcosahedronGeometry(2, 0);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.9 });
+                mesh = new THREE.Mesh(geo, mat);
+            }
+            else if (type === 'photo') {
+                const geo = new THREE.BoxGeometry(3, 4, 0.2);
+                const mat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+                mesh = new THREE.Mesh(geo, mat);
+            }
+            else {
+                const geo = new THREE.OctahedronGeometry(2, 0);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+                mesh = new THREE.Mesh(geo, mat);
+            }
+
+            mesh.position.set(x, y, z);
+            mesh.userData = { id: id, desc: desc, baseY: y, timeOffset: Math.random() * 100, type: 'artifact' };
+            scene.add(mesh);
+            collectables.push(mesh);
+            
+            const light = new THREE.PointLight(lightColor, 2, 40);
+            light.position.set(x, y, z);
+            scene.add(light);
+            mesh.userData.light = light; 
         }
 
         // --- ANUBIS NPC ---
@@ -683,7 +732,7 @@
                 scene.add(rock);
             }
             
-            // --- SMALL BLUE FLOWERS (New) ---
+            // --- SMALL BLUE FLOWERS ---
             const flowerGeo = new THREE.DodecahedronGeometry(3, 0); 
             for (let i = 0; i < 30; i++) {
                 const x = (Math.random() - 0.5) * 8000; 
@@ -947,50 +996,6 @@
             }
         }
 
-        function createArtifact(x, y, z, id, desc, type) {
-            let mesh;
-            let lightColor = 0xffaa00; 
-
-            if (type === 'rope') {
-                const geo = new THREE.TorusGeometry(1.5, 0.4, 16, 32);
-                const mat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-                mesh = new THREE.Mesh(geo, mat);
-            } 
-            else if (type === 'idol') {
-                mesh = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 1.5), new THREE.MeshLambertMaterial({color: 0xffd700}));
-                const head = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 2.5), new THREE.MeshLambertMaterial({color: 0xffd700}));
-                head.position.y = 3;
-                mesh.add(body);
-                mesh.add(head);
-            }
-            else if (type === 'gem') {
-                const geo = new THREE.IcosahedronGeometry(2, 0);
-                const mat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.9 });
-                mesh = new THREE.Mesh(geo, mat);
-            }
-            else if (type === 'photo') {
-                const geo = new THREE.BoxGeometry(3, 4, 0.2);
-                const mat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
-                mesh = new THREE.Mesh(geo, mat);
-            }
-            else {
-                const geo = new THREE.OctahedronGeometry(2, 0);
-                const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
-                mesh = new THREE.Mesh(geo, mat);
-            }
-
-            mesh.position.set(x, y, z);
-            mesh.userData = { id: id, desc: desc, baseY: y, timeOffset: Math.random() * 100, type: 'artifact' };
-            scene.add(mesh);
-            collectables.push(mesh);
-            
-            const light = new THREE.PointLight(lightColor, 2, 40);
-            light.position.set(x, y, z);
-            scene.add(light);
-            mesh.userData.light = light; 
-        }
-
         // --- CONTROLS & ANIMATION ---
         function setupControls() {
             const onKeyDown = function (event) {
@@ -1002,7 +1007,10 @@
                     case 'KeyE': handleInput(); break; 
                     case 'ShiftLeft': case 'ShiftRight': isRunning = true; break;
                     case 'Space': 
-                        if(jumpCount < MAX_JUMPS) { verticalVelocity = 300; jumpCount++; }
+                        if(jumpCount < MAX_JUMPS) { verticalVelocity = 300; jumpCount++; 
+                            totalJumps++;
+                            if (totalJumps >= 100) triggerSecretEnding();
+                        }
                         break;
                 }
             };
@@ -1045,78 +1053,30 @@
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('game-container').requestPointerLock();
             isGameActive = true;
-            
-            // --- RANDOM SPAWN LOGIC ---
-            let safe = false;
-            let sx, sz;
-            let attempts = 0;
-            
-            // Coordinates of major structures to avoid
-            const dangerZones = [
-                { x: 500, z: 500, r: 300 },   // Oasis
-                { x: -500, z: 500, r: 500 },  // Great Pyramid (Huge base)
-                { x: 500, z: -500, r: 300 },  // Sarcophagus
-                { x: -500, z: -500, r: 300 }, // Sphinx
-                { x: 50, z: 50, r: 100 }      // Anubis Center
-            ];
-
-            while (!safe && attempts < 100) {
-                // Random position within safe canyon bounds (-2500 to 2500)
-                // Canyon walls start at 4000
-                sx = (Math.random() - 0.5) * 5000; 
-                sz = (Math.random() - 0.5) * 5000;
-                
-                let tooClose = false;
-                
-                // 1. Check Landmarks
-                for(let zone of dangerZones) {
-                    const dx = sx - zone.x;
-                    const dz = sz - zone.z;
-                    if (Math.sqrt(dx*dx + dz*dz) < zone.r) {
-                        tooClose = true;
-                        break;
-                    }
-                }
-                
-                // 2. Check Physical Objects (Rocks, Pillars, Walls)
-                if (!tooClose) {
-                    for(let obj of objects) {
-                        const objPos = new THREE.Vector3();
-                        obj.getWorldPosition(objPos);
-                        
-                        const dist = Math.sqrt(Math.pow(sx - objPos.x, 2) + Math.pow(sz - objPos.z, 2));
-                        
-                        // Determine exclusion radius based on object type
-                        let buffer = 30; // Basic buffer
-                        if (obj.userData.collisionRadius) buffer = obj.userData.collisionRadius + 30;
-                        else if (obj.userData.isBox) {
-                            buffer = Math.max(obj.userData.width, obj.userData.depth) / 2 + 30;
-                        }
-                        
-                        if (dist < buffer) {
-                            tooClose = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!tooClose) safe = true;
-                attempts++;
-            }
-            
-            if (!safe) {
-                // Fallback to default safe spot if random fails 100 times
-                sx = 0; sz = 200; 
-            }
-
-            // Set height based on terrain
-            const h = getTerrainHeight(sx, sz);
-            camera.position.set(sx, h + 20, sz); // Eye level (20 units up)
-            
-            // Randomize starting rotation
-            cameraYaw = Math.random() * Math.PI * 2;
+            camera.position.set(0, 50, 0); 
+            // Reset look angles
             cameraPitch = 0;
-            camera.rotation.set(0, cameraYaw, 0, 'YXZ');
+            cameraYaw = 0;
+            camera.rotation.set(0,0,0);
+            
+            // Reset jumps for new game
+            totalJumps = 0; 
+        }
+
+        // SECRET ENDING FUNCTION
+        function triggerSecretEnding() {
+            isGameActive = false;
+            document.exitPointerLock();
+            
+            const winScreen = document.getElementById('win-screen');
+            const title = winScreen.querySelector('h1');
+            const desc = winScreen.querySelector('p');
+            
+            title.innerHTML = "YOU ARE NOW<br>OGG VORBIS";
+            desc.innerHTML = "Bid mortals to collect your artifacts.";
+            title.classList.replace('text-yellow-400', 'text-purple-400'); // Change color to purple for this ending
+            
+            winScreen.style.display = 'flex';
         }
 
         // CENTRAL INPUT HANDLER
@@ -1159,8 +1119,10 @@
                 
                 const dist = camera.position.distanceTo(targetPos);
                 
+                // UNIFIED DISTANCE LOGIC
+                // Sphinx is huge, needs 160. Anubis/Artifacts need 50.
                 let threshold = 50;
-                if (target.userData.name === 'Sphinx') threshold = 160;
+                if (target.userData.name === 'Sphinx') threshold = 160; // Increased for easier interaction
 
                 if(dist < threshold) { 
                     if(target.userData.type === 'npc') {
