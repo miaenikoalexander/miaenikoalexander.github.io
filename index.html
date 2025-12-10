@@ -150,10 +150,10 @@
     <!-- Start Screen -->
     <div id="start-screen" class="absolute inset-0 text-center">
         <h1 class="text-xl md:text-3xl mb-4 pixel-font text-white tracking-widest leading-loose">
-            OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.29</span>
+            OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.34</span>
         </h1>
-        <p class="text-xl text-purple-200 mb-8 font-mono max-w-lg">
-            "Four artifacts lost in the purple haze.<br>Find them to leave this dream."
+        <p class="text-xl text-purple-200 mb-8 font-mono max-w-2xl">
+            "Four artifacts lost in the haze of memory.<br>Liberate them to put Ogg Vorbis to rest."
         </p>
         <div class="border-2 border-purple-600 p-1 inline-block animate-pulse cursor-pointer hover:border-white hover:text-white text-purple-400 transition-colors" onclick="startGame()">
             <div class="border border-purple-600 px-6 py-3 pixel-font text-sm hover:border-white">
@@ -161,17 +161,18 @@
             </div>
         </div>
         <div class="mt-8 text-xs text-purple-600 font-mono">
-            UP/W: Forward | DOWN/S: Backward<br>SPACE: Fly | E: Collect
+            UP/W: Forward | DOWN/S: Backward<br>SPACE: Jump | E: Collect
         </div>
     </div>
 
     <!-- Win Screen -->
     <div id="win-screen" class="absolute inset-0 text-center">
-        <h1 class="text-2xl md:text-4xl mb-6 pixel-font text-yellow-400 tracking-widest">
-            ASCENSION GRANTED
+        <h1 class="text-2xl md:text-4xl mb-6 pixel-font text-yellow-400 tracking-widest leading-relaxed">
+            YOU HAVE PLEASED<br>OGG VORBIS
         </h1>
-        <p class="text-xl text-white mb-8 font-mono max-w-lg">
-            The artifacts reunite. The fog lifts.<br>You are awake.
+        <p class="text-xl text-white mb-8 font-mono max-w-lg leading-loose">
+            You offer up the artifacts.<br>
+            And suddenly, you are awake again.
         </p>
         <button onclick="location.reload()" class="bg-purple-700 text-white px-6 py-2 pixel-font text-xs hover:bg-purple-600">
             DREAM AGAIN
@@ -315,7 +316,7 @@
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isRunning = false;
         let verticalVelocity = 0;
         let jumpCount = 0; 
-        const MAX_JUMPS = Infinity; 
+        const MAX_JUMPS = 2; 
 
         // Camera State
         let cameraPitch = 0;
@@ -326,9 +327,9 @@
             active: false,
             answer: ""
         };
-        let activeNPC = null; // Track who we are talking to
-        let leaveTimer = null; // Timer for walking away
-        let dialogTimeout = null; // Timer for auto-closing answers
+        let activeNPC = null; 
+        let leaveTimer = null; 
+        let dialogTimeout = null; 
         
         // Walking Physics
         let bobTimer = 0;
@@ -344,7 +345,7 @@
         let raycaster;
         let objects = []; 
         let collectables = [];
-        let interactables = []; // For NPC Anubis
+        let interactables = []; 
         let ground;
         
         // Game Progression
@@ -371,7 +372,6 @@
             // --- PLATFORM LOGIC (Smoothed) ---
             
             // 1. CENTER SPAWN & ANUBIS CLEARING (New Fix)
-            // Flattens the center 300 units to avoid "hard movement" or uneven ground at spawn
             if (dist < 300) {
                  const t = Math.min(1, Math.max(0, (300 - dist) / 50));
                  return y * (1 - t) + 2 * t; 
@@ -403,9 +403,9 @@
             
             const FOG_COLOR = 0x0a0212; 
             scene.background = new THREE.Color(FOG_COLOR);
-            scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0005); // Less fog for larger map
+            scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0005); 
 
-            camera = new THREE.PerspectiveCamera(FOV, INTERNAL_WIDTH / INTERNAL_HEIGHT, 0.1, 15000); // Further clip plane
+            camera = new THREE.PerspectiveCamera(FOV, INTERNAL_WIDTH / INTERNAL_HEIGHT, 0.1, 15000); 
 
             renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -421,7 +421,7 @@
             scene.add(dirLight);
 
             generateWorld();
-            createAnubis(); // ADD ANUBIS
+            createAnubis(); 
             setupControls();
 
             window.addEventListener('resize', onWindowResize);
@@ -485,10 +485,8 @@
                 ctx.fillStyle = '#3e2723';
                 for(let i=0; i<400; i++) ctx.fillRect(Math.random()*size, Math.random()*size, 3, 3);
             } else if (type === 'moon') {
-                // Pale textured moon
                 ctx.fillStyle = '#eeeeee';
                 ctx.fillRect(0,0,size,size);
-                // Craters
                 for(let i=0; i<40; i++) {
                     const r = Math.random() * 10 + 2;
                     const x = Math.random() * size;
@@ -499,6 +497,13 @@
                     ctx.arc(x,y,r,0,Math.PI*2);
                     ctx.fill();
                 }
+            } else if (type === 'floraBlueFlower') {
+                ctx.fillStyle = '#228B22'; 
+                ctx.fillRect(0,0,size,size);
+                ctx.fillStyle = '#4169E1'; 
+                ctx.fillRect(size/4, size/4, size/2, size/2);
+                ctx.fillStyle = '#FFD700'; 
+                ctx.fillRect(size/2-size/8, size/2-size/8, size/4, size/4);
             }
 
             const tex = new THREE.CanvasTexture(canvas);
@@ -580,9 +585,8 @@
                 type: 'npc', 
                 name: 'Anubis' 
             };
-            interactables.push(hitbox); // Add to separate list or main objects list? 
-            // We'll use a unified interaction system.
-            collectables.push(hitbox); // Treat as interactable for simplicity in loop
+            interactables.push(hitbox); 
+            collectables.push(hitbox); 
 
             scene.add(group);
         }
@@ -599,7 +603,9 @@
             const matPapyrus = new THREE.MeshLambertMaterial({ map: createPixelTexture('papyrus') });
             const matStem = new THREE.MeshLambertMaterial({ color: 0x2d4c1e }); 
             const matLotus = new THREE.MeshBasicMaterial({ color: 0x4444ff }); 
-            const matMoon = new THREE.MeshLambertMaterial({ map: createPixelTexture('moon') }); // Textured moon
+            const matMoon = new THREE.MeshLambertMaterial({ map: createPixelTexture('moon') }); 
+            
+            const matBlueFlower = new THREE.MeshLambertMaterial({ map: createPixelTexture('floraBlueFlower') });
 
             // 1. STARS
             const starGeo = new THREE.BufferGeometry();
@@ -627,7 +633,6 @@
             scene.add(moon);
 
             // 3. TERRAIN
-            // Increased resolution to 600x600 for smoother physics/visual parity
             const groundGeo = new THREE.PlaneGeometry(30000, 30000, 600, 600); 
             const vertices = groundGeo.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
@@ -652,7 +657,6 @@
                     x = Math.cos(angle) * radius;
                     z = Math.sin(angle) * radius;
                     
-                    // Distance checks
                     distTemple = Math.sqrt((x - (-500))**2 + (z - 500)**2);
                     distOasis = Math.sqrt((x - 500)**2 + (z - 500)**2);
                     distSarc = Math.sqrt((x - 500)**2 + (z - (-500))**2);
@@ -677,6 +681,22 @@
                 rock.userData = { collisionRadius: 12 * s };
                 objects.push(rock);
                 scene.add(rock);
+            }
+            
+            // --- SMALL BLUE FLOWERS (New) ---
+            const flowerGeo = new THREE.DodecahedronGeometry(3, 0); 
+            for (let i = 0; i < 30; i++) {
+                const x = (Math.random() - 0.5) * 8000; 
+                const z = (Math.random() - 0.5) * 8000;
+                const h = getTerrainHeight(x, z);
+                
+                const flower = new THREE.Mesh(flowerGeo, matBlueFlower);
+                flower.position.set(x, h + 2, z); 
+                flower.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+                const s = 0.8 + Math.random() * 0.5;
+                flower.scale.set(s, s, s);
+                
+                scene.add(flower);
             }
 
             // LOCATION 1: OASIS (500, 500)
@@ -1140,7 +1160,7 @@
                 const dist = camera.position.distanceTo(targetPos);
                 
                 let threshold = 50;
-                if (target.userData.name === 'Sphinx') threshold = 80;
+                if (target.userData.name === 'Sphinx') threshold = 160;
 
                 if(dist < threshold) { 
                     if(target.userData.type === 'npc') {
@@ -1298,7 +1318,7 @@
 
                 if (camera.position.y < terrainH + eyeHeight) {
                     verticalVelocity = 0;
-                    canJump = true;
+                    jumpCount = 0; // Reset jumps
                     
                     let targetAmp = 0;
                     let targetSpeed = WALK_BOB_SPEED;
