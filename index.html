@@ -180,7 +180,7 @@
     <!-- Start Screen -->
     <div id="start-screen" class="absolute inset-0 text-center">
         <h1 class="text-xl md:text-3xl mb-4 pixel-font text-white tracking-widest leading-loose">
-            OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.36</span>
+            OGG VORBIS <span class="text-lg md:text-2xl text-purple-400">V.72</span>
         </h1>
         <p class="text-xl text-purple-200 mb-8 font-mono max-w-2xl">
             "Four artifacts lost in the haze of memory.<br>Liberate them to put Ogg Vorbis to rest."
@@ -303,25 +303,17 @@
             const s = sounds[name];
 
             // Specific behaviors
-            if (name === 'step') {
-                s.currentTime = 0;
-                s.play().catch(e => {});
-                return s;
-            } 
-            else if (name === 'bgm' || name === 'title') {
+            if (name === 'bgm' || name === 'title') {
                 s.play().catch(e => {});
                 return s;
             }
             else {
-                // One-shots (Voices, Stinger, Collect, Win)
-                // We use clones for overlapping sounds like Collect, but for Ending logic tracking we need the object.
-                // Since user requested "No Stacking" for most things, simple playback is safer.
-                
-                // For "secret" and "ending", we want to know when they end to start looping title music.
-                // We will return the main audio object.
-                s.currentTime = 0;
-                s.play().catch(e => {});
-                return s;
+                // Clone all SFX (step, collect, voices) to ensure they trigger reliably
+                // even if triggered rapidly (like running steps)
+                const clone = s.cloneNode();
+                clone.volume = s.volume;
+                clone.play().catch(e => {});
+                return clone;
             }
         }
 
