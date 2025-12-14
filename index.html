@@ -142,9 +142,40 @@
         }
         
         #win-screen { display: none; }
+
+        /* PRE-TITLE SCREEN (INITIATE) */
+        #init-screen {
+            position: absolute;
+            inset: 0;
+            background: #000;
+            z-index: 100; /* Above everything */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .init-btn {
+            color: white;
+            font-family: 'Press Start 2P', cursive;
+            cursor: pointer;
+            font-size: 24px;
+            text-transform: uppercase;
+            transition: color 0.3s, text-shadow 0.3s;
+        }
+
+        .init-btn:hover {
+            color: #a855f7; /* Purple */
+            text-shadow: 0 0 10px #a855f7;
+        }
     </style>
 </head>
 <body>
+
+    <!-- PRE-TITLE INIT SCREEN -->
+    <div id="init-screen">
+        <div class="init-btn" onclick="initiateGame()">INITIATE GAME</div>
+    </div>
 
     <!-- Start Screen -->
     <div id="start-screen" class="absolute inset-0 text-center">
@@ -160,7 +191,7 @@
             </div>
         </div>
         <div class="mt-8 text-xs text-purple-600 font-mono">
-            UP/W: Forward | DOWN/S: Backward<br>SPACE: Fly | E: Collect | R: Riddle
+            UP/W: Forward | DOWN/S: Backward | SHIFT: Sprint<br>SPACE: Fly | E: Collect | R: Riddle
         </div>
     </div>
 
@@ -212,6 +243,101 @@
     <div id="game-container"></div>
 
     <script>
+        // --- AUDIO SYSTEM INTEGRATION ---
+        const SOUND_URLS = {
+            title:   "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/TITLE%20SCREEN%20-%20Ogg%20Vorbis.wav",
+            gamestart: "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/GAME%20START%20-%20Ogg%20Vorbis.wav",
+            bgm:     "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/AMBIENT%20-%20Ogg%20Vorbis.wav", 
+            anubis:  "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/ANUBIS%20-%20Ogg%20Vorbis.wav",
+            sphinx:  "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/SPHINX%20-%20Ogg%20Vorbis.wav",
+            step:    "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/Footstep%20-%20Ogg%20Vorbis.wav", 
+            collect: "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/ARTIFACT%20ACQUIRED%20-%20Ogg%20Vorbis.wav", 
+            secret:  "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/EASTER%20EGG%20-%20Ogg%20Vorbis.wav",
+            ending:  "https://github.com/miaenikoalexander/miaenikoalexander.github.io/raw/refs/heads/main/drive-download-20251213T233159Z-1-001/ENDING%20-%20Ogg%20Vorbis.wav" 
+        };
+
+        const sounds = {
+            title: new Audio(),
+            gamestart: new Audio(),
+            bgm: new Audio(),
+            anubis: new Audio(),
+            sphinx: new Audio(),
+            step: new Audio(),
+            collect: new Audio(),
+            secret: new Audio(),
+            ending: new Audio()
+        };
+
+        function initAudio() {
+            // Title (Loops)
+            if(SOUND_URLS.title) {
+                sounds.title.src = SOUND_URLS.title;
+                sounds.title.loop = true;
+                sounds.title.volume = 0.5;
+            }
+
+            // Game Start (One Shot)
+            if (SOUND_URLS.gamestart) { sounds.gamestart.src = SOUND_URLS.gamestart; sounds.gamestart.volume = 0.6; }
+
+            // BGM (Loops)
+            if (SOUND_URLS.bgm) {
+                sounds.bgm.src = SOUND_URLS.bgm;
+                sounds.bgm.loop = true;
+                sounds.bgm.volume = 0.4;
+            }
+            
+            // Voices (One shot, no loop)
+            if (SOUND_URLS.anubis) { sounds.anubis.src = SOUND_URLS.anubis; sounds.anubis.volume = 0.6; }
+            if (SOUND_URLS.sphinx) { sounds.sphinx.src = SOUND_URLS.sphinx; sounds.sphinx.volume = 0.6; }
+            
+            // SFX (One shot, no loop)
+            if (SOUND_URLS.step) { sounds.step.src = SOUND_URLS.step; sounds.step.volume = 0.3; }
+            if (SOUND_URLS.collect) { sounds.collect.src = SOUND_URLS.collect; sounds.collect.volume = 0.6; }
+            if (SOUND_URLS.secret) { sounds.secret.src = SOUND_URLS.secret; sounds.secret.volume = 0.8; }
+            if (SOUND_URLS.ending) { sounds.ending.src = SOUND_URLS.ending; sounds.ending.volume = 0.8; }
+        }
+
+        function playSound(name) {
+            if (!SOUND_URLS[name]) return null;
+            
+            const s = sounds[name];
+
+            // Specific behaviors
+            if (name === 'step') {
+                s.currentTime = 0;
+                s.play().catch(e => {});
+                return s;
+            } 
+            else if (name === 'bgm' || name === 'title') {
+                s.play().catch(e => {});
+                return s;
+            }
+            else {
+                // One-shots (Voices, Stinger, Collect, Win)
+                // We use clones for overlapping sounds like Collect, but for Ending logic tracking we need the object.
+                // Since user requested "No Stacking" for most things, simple playback is safer.
+                
+                // For "secret" and "ending", we want to know when they end to start looping title music.
+                // We will return the main audio object.
+                s.currentTime = 0;
+                s.play().catch(e => {});
+                return s;
+            }
+        }
+
+        function stopSound(name) {
+            if(sounds[name]) {
+                sounds[name].pause();
+                sounds[name].currentTime = 0;
+            }
+        }
+
+        function initiateGame() {
+            document.getElementById('init-screen').style.display = 'none';
+            // Start Title Music immediately
+            playSound('title');
+        }
+
         // --- INTERNAL PIXEL ART GENERATOR ---
         function generatePixelIcon(type) {
             const canvas = document.createElement('canvas');
@@ -341,6 +467,9 @@
         const WALK_BOB_AMOUNT = 1.0; 
         const RUN_BOB_AMOUNT = 2.0;
         
+        // Audio Timer
+        let lastStepTime = 0;
+
         let prevTime = performance.now();
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
@@ -442,6 +571,9 @@
             createAnubis();
             createOggVorbis(); 
             setupControls();
+            
+            // Initialize Audio
+            initAudio();
 
             window.addEventListener('resize', onWindowResize);
             animate();
@@ -1123,6 +1255,7 @@
         function setupControls() {
             const onKeyDown = function (event) {
                 switch (event.code) {
+                    case 'Escape': case 'Digit0': killProgram(); break;
                     case 'ArrowUp': case 'KeyW': moveForward = true; break;
                     case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
                     case 'ArrowDown': case 'KeyS': moveBackward = true; break;
@@ -1131,8 +1264,11 @@
                     case 'KeyR': handleInput('riddle'); break; 
                     case 'ShiftLeft': case 'ShiftRight': isRunning = true; break;
                     case 'Space': 
-                        if(jumpCount < MAX_JUMPS) { verticalVelocity = 300; jumpCount++; 
+                        if(jumpCount < MAX_JUMPS) { 
+                            verticalVelocity = 300; jumpCount++; 
                             consecutiveJumps++; 
+                            // Play Jump Sound
+                            playSound('jump');
                             if (consecutiveJumps >= 400) triggerSecretEnding();
                         }
                         break;
@@ -1178,6 +1314,15 @@
             document.getElementById('game-container').requestPointerLock();
             isGameActive = true;
             
+            // Stop Title Music
+            stopSound('title');
+            
+            // Play Game Start Stinger (Once)
+            playSound('gamestart');
+            
+            // Play Ambient Loop
+            playSound('bgm');
+
             // Random Spawn Logic
             const angle = Math.random() * Math.PI * 2;
             const minR = 400;
@@ -1213,7 +1358,65 @@
             desc.innerHTML = "Bid mortals to collect your artifacts.";
             title.classList.replace('text-yellow-400', 'text-purple-400'); // Change color to purple for this ending
             
+            // Stop Ambient
+            stopSound('bgm');
+            // Play Secret Sound, then loop title
+            const s = playSound('secret');
+            if(s) s.onended = () => playSound('title');
+
             winScreen.style.display = 'flex';
+        }
+
+        // KILL SWITCH
+        function killProgram() {
+            isGameActive = false;
+            document.exitPointerLock();
+            
+            // Stop all audio
+            Object.values(sounds).forEach(s => {
+                s.pause();
+                s.currentTime = 0;
+            });
+
+            // Wipe DOM
+            document.body.innerHTML = '';
+            document.body.style.backgroundColor = 'black';
+            
+            const container = document.createElement('div');
+            container.style.position = "absolute";
+            container.style.top = "50%";
+            container.style.left = "50%";
+            container.style.transform = "translate(-50%, -50%)";
+            container.style.textAlign = "center";
+
+            const msg = document.createElement('div');
+            msg.innerText = "PROGRAM TERMINATED";
+            msg.style.color = "red";
+            msg.style.fontFamily = "monospace";
+            msg.style.fontSize = "24px";
+            msg.style.marginBottom = "20px";
+            
+            const btn = document.createElement('button');
+            btn.innerText = "SYSTEM REBOOT";
+            btn.style.background = "black";
+            btn.style.color = "#0f0"; // Matrix green
+            btn.style.border = "2px solid #0f0";
+            btn.style.padding = "10px 20px";
+            btn.style.fontFamily = "monospace";
+            btn.style.fontSize = "16px";
+            btn.style.cursor = "pointer";
+            btn.style.textTransform = "uppercase";
+            
+            // Hover effect logic
+            btn.onmouseover = () => { btn.style.background = "#0f0"; btn.style.color = "black"; };
+            btn.onmouseout = () => { btn.style.background = "black"; btn.style.color = "#0f0"; };
+            
+            // Reload page on click
+            btn.onclick = () => location.reload();
+
+            container.appendChild(msg);
+            container.appendChild(btn);
+            document.body.appendChild(container);
         }
 
         // CENTRAL INPUT HANDLER
@@ -1305,11 +1508,14 @@
                 if(!inventory.photo) phrases.push("ANUBIS: The guardian of the west has kept a memory between its paws.");
                 
                 if (Object.values(inventory).every(Boolean)) {
-                       phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
+                        phrases.push("ANUBIS: You have gathered the fragments. The path to waking is open.");
                 }
 
                 if (phrases.length > 0) msg = phrases[Math.floor(Math.random() * phrases.length)];
                 
+                // PLAY AUDIO ON INTERACTION
+                playSound('anubis');
+
                 text.innerText = msg;
                 box.style.display = 'block';
                 // Anubis auto-closes after long time if you just stand there
@@ -1323,6 +1529,9 @@
                 
                 const r = riddles[Math.floor(Math.random() * riddles.length)];
                 
+                // PLAY SPHINX AUDIO
+                playSound('sphinx');
+
                 text.innerText = "SPHINX: " + r.q + "\n\n[ Press E or Click to Reveal ]";
                 box.style.display = 'block';
                 
@@ -1342,6 +1551,9 @@
             // Set dynamic pixel art icon
             slot.style.backgroundImage = 'url(' + generatePixelIcon(id) + ')';
 
+            // Play Collect Sound
+            playSound('collect');
+
             const box = document.getElementById('dialog-box');
             document.getElementById('dialog-text').innerText = desc;
             box.style.display = 'block';
@@ -1359,6 +1571,12 @@
                     document.exitPointerLock();
                     document.getElementById('win-screen').style.display = 'flex';
                     isGameActive = false;
+                    
+                    // STOP AMBIENT
+                    stopSound('bgm');
+                    // Play Win Sound, then loop title
+                    const s = playSound('ending');
+                    if(s) s.onended = () => playSound('title');
                 }, 3000);
             }
         }
@@ -1423,9 +1641,12 @@
                     
                     let targetAmp = 0;
                     let targetSpeed = WALK_BOB_SPEED;
+                    let isMoving = false;
+
                     if (moveForward || moveBackward || moveLeft || moveRight) {
                         targetSpeed = isRunning ? RUN_BOB_SPEED : WALK_BOB_SPEED;
                         targetAmp = isRunning ? RUN_BOB_AMOUNT : WALK_BOB_AMOUNT;
+                        isMoving = true;
                     }
                     currentBobAmp += (targetAmp - currentBobAmp) * 10.0 * delta;
                     bobTimer += delta * targetSpeed;
@@ -1435,6 +1656,12 @@
                     if (camera.position.y < terrainH + eyeHeight - 1.0) camera.position.y = terrainH + eyeHeight - 1.0;
                     
                     consecutiveJumps = 0;
+
+                    // --- FOOTSTEP SOUND LOGIC ---
+                    if (isMoving && time - lastStepTime > (isRunning ? 350 : 500)) {
+                        playSound('step');
+                        lastStepTime = time;
+                    }
                 }
                 
                 if (camera.position.y < terrainH + eyeHeight - 2) camera.position.y = terrainH + eyeHeight;
