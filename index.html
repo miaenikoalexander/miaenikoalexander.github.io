@@ -870,6 +870,23 @@
             scene.add(group);
         }
 
+        // --- TEXTURE GEN ---
+        function createTextTexture(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0)'; 
+            ctx.font = 'bold 60px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fbbf24'; 
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 4;
+            ctx.fillText(text, 256, 64);
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        }
+
         // --- WORLD GEN ---
         function generateWorld() {
             const matGround = new THREE.MeshLambertMaterial({ map: createPixelTexture('ground') });
@@ -921,6 +938,8 @@
             ground.rotation.x = -Math.PI / 2;
             ground.frustumCulled = false; 
             scene.add(ground);
+
+            // REMOVED CLIFF TEXT (LOVE YOU GUYS) - As requested
 
             // ROCKY OUTCROPPINGS
             const rockGeo = new THREE.DodecahedronGeometry(15, 0);
@@ -1223,8 +1242,15 @@
         // --- CONTROLS & ANIMATION ---
         function setupControls() {
             const onKeyDown = function (event) {
+                // Allow quitting even if game logic is paused/ended (though killProgram sets isGameActive=false anyway)
+                if (event.code === 'Escape' || event.code === 'Digit0') {
+                    killProgram();
+                    return;
+                }
+
+                if (!isGameActive) return;
+
                 switch (event.code) {
-                    case 'Escape': case 'Digit0': killProgram(); break;
                     case 'ArrowUp': case 'KeyW': moveForward = true; break;
                     case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
                     case 'ArrowDown': case 'KeyS': moveBackward = true; break;
@@ -1243,7 +1269,8 @@
                             
                             // Play Jump Sound
                             playSound('jump');
-                            if (consecutiveJumps >= 400) triggerSecretEnding();
+                            // Fix: Only trigger once
+                            if (consecutiveJumps === 400) triggerSecretEnding();
                         }
                         break;
                 }
